@@ -1,0 +1,1016 @@
+signup employer input:
+
+{
+    "email": "test12@gmail.com",
+    "password": "your_secure_password",
+    "company_name": "BlaBla Inc.",
+    "company_level": "Medium",
+    "website_url": "blbla.com",
+    "company_type": "LLC",
+    "industry": "Technology",
+    "admin_name": "John Stuart",
+    "description": "agsdfhgashjkfghjas",
+    "location": "London",
+    "tags": "hiring"
+}
+
+Note: This should be sent as multipart/form-data with a logo file. Example curl command:
+
+curl -X POST "http://your-api-url/signupEmployer" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "email=test12@gmail.com" \
+  -F "password=your_secure_password" \
+  -F "company_name=BlaBla Inc." \
+  -F "company_level=Medium" \
+  -F "website_url=blbla.com" \
+  -F "company_type=LLC" \
+  -F "industry=Technology" \
+  -F "admin_name=John Stuart" \
+  -F "description=agsdfhgashjkfghjas" \
+  -F "location=London" \
+  -F "tags=hiring" \
+  -F "file=@/path/to/your/logo.jpg"
+
+Frontend Implementation Examples:
+
+1. React with Axios:
+```javascript
+import axios from 'axios';
+
+const EmployerSignup = () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData();
+    formData.append('email', 'test12@gmail.com');
+    formData.append('password', 'your_secure_password');
+    formData.append('company_name', 'BlaBla Inc.');
+    formData.append('company_level', 'Medium');
+    formData.append('website_url', 'blbla.com');
+    formData.append('company_type', 'LLC');
+    formData.append('industry', 'Technology');
+    formData.append('admin_name', 'John Stuart');
+    formData.append('description', 'agsdfhgashjkfghjas');
+    formData.append('location', 'London');
+    formData.append('tags', 'hiring');
+    formData.append('file', logoFile); // logoFile from file input
+
+    try {
+      const response = await axios.post('http://your-api-url/signupEmployer', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      console.log('Signup successful:', response.data);
+    } catch (error) {
+      console.error('Signup failed:', error);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* Your form fields here */}
+    </form>
+  );
+};
+```
+
+2. React with Fetch:
+```javascript
+const EmployerSignup = () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData();
+    formData.append('email', 'test12@gmail.com');
+    formData.append('password', 'your_secure_password');
+    formData.append('company_name', 'BlaBla Inc.');
+    formData.append('company_level', 'Medium');
+    formData.append('website_url', 'blbla.com');
+    formData.append('company_type', 'LLC');
+    formData.append('industry', 'Technology');
+    formData.append('admin_name', 'John Stuart');
+    formData.append('description', 'agsdfhgashjkfghjas');
+    formData.append('location', 'London');
+    formData.append('tags', 'hiring');
+    formData.append('file', logoFile); // logoFile from file input
+
+    try {
+      const response = await fetch('http://your-api-url/signupEmployer', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+      console.log('Signup successful:', data);
+    } catch (error) {
+      console.error('Signup failed:', error);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* Your form fields here */}
+    </form>
+  );
+};
+```
+
+3. Vue.js with Axios:
+```javascript
+<template>
+  <form @submit.prevent="handleSubmit">
+    <!-- Your form fields here -->
+  </form>
+</template>
+
+<script>
+import axios from 'axios';
+
+export default {
+  methods: {
+    async handleSubmit() {
+      const formData = new FormData();
+      formData.append('email', 'test12@gmail.com');
+      formData.append('password', 'your_secure_password');
+      formData.append('company_name', 'BlaBla Inc.');
+      formData.append('company_level', 'Medium');
+      formData.append('website_url', 'blbla.com');
+      formData.append('company_type', 'LLC');
+      formData.append('industry', 'Technology');
+      formData.append('admin_name', 'John Stuart');
+      formData.append('description', 'agsdfhgashjkfghjas');
+      formData.append('location', 'London');
+      formData.append('tags', 'hiring');
+      formData.append('file', logoFile); // logoFile from file input
+
+      try {
+        const response = await axios.post('http://your-api-url/signupEmployer', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        console.log('Signup successful:', response.data);
+      } catch (error) {
+        console.error('Signup failed:', error);
+      }
+    }
+  }
+};
+</script>
+```
+
+4. Angular with HttpClient:
+```typescript
+import { Component } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+
+@Component({
+  selector: 'app-employer-signup',
+  template: `
+    <form (ngSubmit)="handleSubmit()">
+      <!-- Your form fields here -->
+    </form>
+  `
+})
+export class EmployerSignupComponent {
+  constructor(private http: HttpClient) {}
+
+  async handleSubmit() {
+    const formData = new FormData();
+    formData.append('email', 'test12@gmail.com');
+    formData.append('password', 'your_secure_password');
+    formData.append('company_name', 'BlaBla Inc.');
+    formData.append('company_level', 'Medium');
+    formData.append('website_url', 'blbla.com');
+    formData.append('company_type', 'LLC');
+    formData.append('industry', 'Technology');
+    formData.append('admin_name', 'John Stuart');
+    formData.append('description', 'agsdfhgashjkfghjas');
+    formData.append('location', 'London');
+    formData.append('tags', 'hiring');
+    formData.append('file', this.logoFile); // logoFile from file input
+
+    try {
+      const response = await this.http.post('http://your-api-url/signupEmployer', formData).toPromise();
+      console.log('Signup successful:', response);
+    } catch (error) {
+      console.error('Signup failed:', error);
+    }
+  }
+}
+```
+
+Note: In all examples, you'll need to:
+1. Add proper form fields with appropriate input types
+2. Add form validation
+3. Handle file input for the logo
+4. Add error handling and loading states
+5. Add proper TypeScript types if using TypeScript
+6. Replace 'http://your-api-url' with your actual API URL
+
+signup employer response :
+
+{
+  "Status": "Successfull",
+  "Message": "BlaBla Inc. has been successfully signed up",
+  "Details": "data=[{'user_id': 'cdcbd14c-ac13-4092-a59d-0f44be757d82', 'created_at': '2025-06-13T13:56:11.307019+00:00', 'id': 7, 'company_name': 'BlaBla Inc.', 'company_level': 'Medium', 'website_url': 'blbla.com', 'company_type': 'LLC', 'industry': 'Technology', 'admin_name': 'John Stuart', 'email': 'test12@gmail.com', 'logo_url': 'https://pyakerdijdkscgtalugu.supabase.co/storage/v1/object/public/companylogo/logos/cdcbd14c-ac13-4092-a59d-0f44be757d82/77.jpg?', 'description': 'agsdfhgashjkfghjas', 'location': 'London', 'tags': 'hiring', 'role': 'employer'}] count=None"
+}
+
+
+====================================================================
+
+sample output for create-jobs endpoint
+{
+    "Status": "Sucessfull",
+    "Message": "Job has been created",
+    "Details": "data=[{'id': 17, 'user_id': '829e8293-c7c1-409d-bd73-8f1433c425f7', 'title': 'LF PROGRAMMER', 'job_description': 'sfasfasfasfasfa', 'skill_1': 'AWS', 'skill_2': 'Figma', 'skill_3': 'Java', 'skill_4': 'Organization', 'skill_5': 'Python', 'pwd_friendly': True, 'created_at': '2025-06-13T14:37:22.972195+00:00', 'min_salary': 900.1, 'max_salary': 10000.5, 'company_name': 'BlaBla Inc.', 'location': 'Bahay Ko', 'job_type': 'Full-Time', 'industry': 'Technology', 'experience': 'Professional'}] count=None"
+}
+
+sample input create-jobs
+{
+  "title": "LF PROGRAMMER",
+  "company_name": "BlaBla Inc.",
+  "location": "Bahay Ko",
+  "job_type": "Full-Time",
+  "industry": "Technology",
+  "experience": "Professional",
+  "description": "sfasfasfasfasfa",
+  "skill_1": "AWS",
+  "skill_2": "Figma",
+  "skill_3": "Java",
+  "skill_4": "Organization",
+  "skill_5": "Python",
+  "pwd_friendly": true,
+  "min_salary": 900.1,
+  "max_salary": 10000.5
+}
+
+Frontend Implementation Examples:
+
+1. React with Axios:
+```javascript
+import React, { useState } from 'react';
+import axios from 'axios';
+
+const CreateJob = () => {
+  const [formData, setFormData] = useState({
+    title: '',
+    company_name: '',
+    location: '',
+    job_type: '',
+    industry: '',
+    experience: '',
+    description: '',
+    skill_1: '',
+    skill_2: '',
+    skill_3: '',
+    skill_4: '',
+    skill_5: '',
+    pwd_friendly: false,
+    min_salary: '',
+    max_salary: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleInputChange = (e) => {
+    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    setFormData({
+      ...formData,
+      [e.target.name]: value
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await axios.post('http://your-api-url/create-jobs', formData, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      console.log('Job created successfully:', response.data);
+      // Handle success (e.g., redirect to jobs list)
+    } catch (error) {
+      setError(error.response?.data?.Message || 'Failed to create job');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="max-w-2xl mx-auto p-4">
+      {error && <div className="text-red-500 mb-4">{error}</div>}
+      
+      <div className="mb-4">
+        <label className="block mb-2">Job Title</label>
+        <input
+          type="text"
+          name="title"
+          value={formData.title}
+          onChange={handleInputChange}
+          required
+          className="w-full p-2 border rounded"
+        />
+      </div>
+
+      <div className="mb-4">
+        <label className="block mb-2">Company Name</label>
+        <input
+          type="text"
+          name="company_name"
+          value={formData.company_name}
+          onChange={handleInputChange}
+          required
+          className="w-full p-2 border rounded"
+        />
+      </div>
+
+      <div className="mb-4">
+        <label className="block mb-2">Location</label>
+        <input
+          type="text"
+          name="location"
+          value={formData.location}
+          onChange={handleInputChange}
+          required
+          className="w-full p-2 border rounded"
+        />
+      </div>
+
+      <div className="mb-4">
+        <label className="block mb-2">Job Type</label>
+        <select
+          name="job_type"
+          value={formData.job_type}
+          onChange={handleInputChange}
+          required
+          className="w-full p-2 border rounded"
+        >
+          <option value="">Select Job Type</option>
+          <option value="Full-Time">Full-Time</option>
+          <option value="Part-Time">Part-Time</option>
+          <option value="Contract">Contract</option>
+          <option value="Freelance">Freelance</option>
+        </select>
+      </div>
+
+      <div className="mb-4">
+        <label className="block mb-2">Industry</label>
+        <input
+          type="text"
+          name="industry"
+          value={formData.industry}
+          onChange={handleInputChange}
+          required
+          className="w-full p-2 border rounded"
+        />
+      </div>
+
+      <div className="mb-4">
+        <label className="block mb-2">Experience Level</label>
+        <select
+          name="experience"
+          value={formData.experience}
+          onChange={handleInputChange}
+          required
+          className="w-full p-2 border rounded"
+        >
+          <option value="">Select Experience Level</option>
+          <option value="Entry">Entry Level</option>
+          <option value="Mid">Mid Level</option>
+          <option value="Professional">Professional</option>
+          <option value="Senior">Senior Level</option>
+        </select>
+      </div>
+
+      <div className="mb-4">
+        <label className="block mb-2">Job Description</label>
+        <textarea
+          name="description"
+          value={formData.description}
+          onChange={handleInputChange}
+          required
+          rows="4"
+          className="w-full p-2 border rounded"
+        />
+      </div>
+
+      <div className="mb-4">
+        <label className="block mb-2">Required Skills</label>
+        <input
+          type="text"
+          name="skill_1"
+          value={formData.skill_1}
+          onChange={handleInputChange}
+          placeholder="Primary Skill"
+          required
+          className="w-full p-2 border rounded mb-2"
+        />
+        <input
+          type="text"
+          name="skill_2"
+          value={formData.skill_2}
+          onChange={handleInputChange}
+          placeholder="Secondary Skill"
+          className="w-full p-2 border rounded mb-2"
+        />
+        <input
+          type="text"
+          name="skill_3"
+          value={formData.skill_3}
+          onChange={handleInputChange}
+          placeholder="Additional Skill"
+          className="w-full p-2 border rounded mb-2"
+        />
+        <input
+          type="text"
+          name="skill_4"
+          value={formData.skill_4}
+          onChange={handleInputChange}
+          placeholder="Additional Skill"
+          className="w-full p-2 border rounded mb-2"
+        />
+        <input
+          type="text"
+          name="skill_5"
+          value={formData.skill_5}
+          onChange={handleInputChange}
+          placeholder="Additional Skill"
+          className="w-full p-2 border rounded"
+        />
+      </div>
+
+      <div className="mb-4">
+        <label className="flex items-center">
+          <input
+            type="checkbox"
+            name="pwd_friendly"
+            checked={formData.pwd_friendly}
+            onChange={handleInputChange}
+            className="mr-2"
+          />
+          PWD Friendly
+        </label>
+      </div>
+
+      <div className="mb-4 grid grid-cols-2 gap-4">
+        <div>
+          <label className="block mb-2">Minimum Salary</label>
+          <input
+            type="number"
+            name="min_salary"
+            value={formData.min_salary}
+            onChange={handleInputChange}
+            required
+            min="0"
+            step="0.1"
+            className="w-full p-2 border rounded"
+          />
+        </div>
+        <div>
+          <label className="block mb-2">Maximum Salary</label>
+          <input
+            type="number"
+            name="max_salary"
+            value={formData.max_salary}
+            onChange={handleInputChange}
+            required
+            min="0"
+            step="0.1"
+            className="w-full p-2 border rounded"
+          />
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
+      >
+        {loading ? 'Creating Job...' : 'Create Job'}
+      </button>
+    </form>
+  );
+};
+
+export default CreateJob;
+```
+
+2. Vue.js with Axios:
+```vue
+<template>
+  <form @submit.prevent="handleSubmit" class="max-w-2xl mx-auto p-4">
+    <div v-if="error" class="text-red-500 mb-4">{{ error }}</div>
+    
+    <div class="mb-4">
+      <label class="block mb-2">Job Title</label>
+      <input
+        type="text"
+        v-model="formData.title"
+        required
+        class="w-full p-2 border rounded"
+      />
+    </div>
+
+    <!-- Add similar form fields for other inputs -->
+
+    <div class="mb-4">
+      <label class="flex items-center">
+        <input
+          type="checkbox"
+          v-model="formData.pwd_friendly"
+          class="mr-2"
+        />
+        PWD Friendly
+      </label>
+    </div>
+
+    <button
+      type="submit"
+      :disabled="loading"
+      class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
+    >
+      {{ loading ? 'Creating Job...' : 'Create Job' }}
+    </button>
+  </form>
+</template>
+
+<script>
+import axios from 'axios';
+
+export default {
+  data() {
+    return {
+      formData: {
+        title: '',
+        company_name: '',
+        location: '',
+        job_type: '',
+        industry: '',
+        experience: '',
+        description: '',
+        skill_1: '',
+        skill_2: '',
+        skill_3: '',
+        skill_4: '',
+        skill_5: '',
+        pwd_friendly: false,
+        min_salary: '',
+        max_salary: ''
+      },
+      loading: false,
+      error: null
+    };
+  },
+  methods: {
+    async handleSubmit() {
+      this.loading = true;
+      this.error = null;
+
+      try {
+        const response = await axios.post('http://your-api-url/create-jobs', this.formData, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        console.log('Job created successfully:', response.data);
+        // Handle success
+      } catch (error) {
+        this.error = error.response?.data?.Message || 'Failed to create job';
+      } finally {
+        this.loading = false;
+      }
+    }
+  }
+};
+</script>
+```
+
+3. Angular with HttpClient:
+```typescript
+import { Component } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+
+@Component({
+  selector: 'app-create-job',
+  template: `
+    <form [formGroup]="jobForm" (ngSubmit)="handleSubmit()" class="max-w-2xl mx-auto p-4">
+      <div *ngIf="error" class="text-red-500 mb-4">{{ error }}</div>
+      
+      <div class="mb-4">
+        <label class="block mb-2">Job Title</label>
+        <input
+          type="text"
+          formControlName="title"
+          class="w-full p-2 border rounded"
+        />
+      </div>
+
+      <!-- Add similar form fields for other inputs -->
+
+      <div class="mb-4">
+        <label class="flex items-center">
+          <input
+            type="checkbox"
+            formControlName="pwd_friendly"
+            class="mr-2"
+          />
+          PWD Friendly
+        </label>
+      </div>
+
+      <button
+        type="submit"
+        [disabled]="loading || !jobForm.valid"
+        class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
+      >
+        {{ loading ? 'Creating Job...' : 'Create Job' }}
+      </button>
+    </form>
+  `
+})
+export class CreateJobComponent {
+  jobForm: FormGroup;
+  loading = false;
+  error: string | null = null;
+
+  constructor(
+    private fb: FormBuilder,
+    private http: HttpClient
+  ) {
+    this.jobForm = this.fb.group({
+      title: ['', Validators.required],
+      company_name: ['', Validators.required],
+      location: ['', Validators.required],
+      job_type: ['', Validators.required],
+      industry: ['', Validators.required],
+      experience: ['', Validators.required],
+      description: ['', Validators.required],
+      skill_1: ['', Validators.required],
+      skill_2: [''],
+      skill_3: [''],
+      skill_4: [''],
+      skill_5: [''],
+      pwd_friendly: [false],
+      min_salary: ['', [Validators.required, Validators.min(0)]],
+      max_salary: ['', [Validators.required, Validators.min(0)]]
+    });
+  }
+
+  async handleSubmit() {
+    if (this.jobForm.valid) {
+      this.loading = true;
+      this.error = null;
+
+      try {
+        const response = await this.http.post('http://your-api-url/create-jobs', this.jobForm.value, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+            'Content-Type': 'application/json'
+          }
+        }).toPromise();
+        console.log('Job created successfully:', response);
+        // Handle success
+      } catch (error) {
+        this.error = error.error?.Message || 'Failed to create job';
+      } finally {
+        this.loading = false;
+      }
+    }
+  }
+}
+```
+
+Note: In all examples:
+1. Replace 'http://your-api-url' with your actual API URL
+2. Add proper error handling and validation
+3. Add loading states and success messages
+4. Add proper TypeScript types if using TypeScript
+5. Add proper form validation
+6. Handle authentication token management
+7. Add proper styling to match your application's design
+8. Add proper navigation after successful job creation
+
+
+
+
+=================================================================================
+
+signup employee endpoint sample output:
+
+{
+  "Status": "Successfull",
+  "Message": "Richard Gomex has been successfully signed up",
+  "Details": [
+    {
+      "id": 24,
+      "user_id": "932ffa37-61d3-41a4-b621-94d9d834e032",
+      "full_name": "Richard Gomex",
+      "disability": "Pilay",
+      "skills": "AWS,Figma,SEO,Python,Java",
+      "created_at": "2025-06-13T15:53:47.207587+00:00",
+      "role": "employee",
+      "resume_url": "https://pyakerdijdkscgtalugu.supabase.co/storage/v1/object/public/resumes/resumes/932ffa37-61d3-41a4-b621-94d9d834e032/resume_sample.pdf?",
+      "profile_pic_url": "https://pyakerdijdkscgtalugu.supabase.co/storage/v1/object/public/profilepic/profilepic/932ffa37-61d3-41a4-b621-94d9d834e032/77.jpg?",
+      "address": "Quezon City",
+      "phone_number": "09123456789",
+      "short_bio": "asfdassfasfassf",
+      "pwd_id_front_url": "https://pyakerdijdkscgtalugu.supabase.co/storage/v1/object/public/pwdidfront/pwdidfront/932ffa37-61d3-41a4-b621-94d9d834e032/Screenshot 2025-06-13 131653.png?",
+      "pwd_id_back_url": "https://pyakerdijdkscgtalugu.supabase.co/storage/v1/object/public/pwdidback/pwdidback/932ffa37-61d3-41a4-b621-94d9d834e032/Screenshot 2025-06-13 131653.png?",
+      "email": "rarara12@gmail.com"
+    }
+  ]
+}
+
+signup employee endpoint sample input:
+{
+  "full_name": "Richard Gomex",
+  "email": "rarara12@gmail.com",
+  "password": "12345678",
+  "address": "Quezon City",
+  "phone_number": "09123456789",
+  "short_bio": "asfdassfasfassf",
+  "disability": "Pilay",
+  "skills": "AWS,Figma,SEO,Python,Java"
+}
+
+Note: This should be sent as multipart/form-data with optional file uploads. Example curl command:
+
+curl -X POST "http://your-api-url/signupEmployee" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "full_name=Richard Gomex" \
+  -F "email=rarara12@gmail.com" \
+  -F "password=12345678" \
+  -F "address=Quezon City" \
+  -F "phone_number=09123456789" \
+  -F "short_bio=asfdassfasfassf" \
+  -F "disability=Pilay" \
+  -F "skills=AWS,Figma,SEO,Python,Java" \
+  -F "resume=@/path/to/resume.pdf" \
+  -F "profile_pic=@/path/to/profile.jpg" \
+  -F "pwd_id_front=@/path/to/pwd-front.jpg" \
+  -F "pwd_id_back=@/path/to/pwd-back.jpg"
+
+React Native Implementation:
+
+1. First, install required dependencies:
+```bash
+npm install @react-navigation/native expo-image-picker expo-document-picker axios
+```
+
+2. Create the signup screens:
+
+```javascript
+// screens/SignupScreen.js
+import React, { useState } from 'react';
+import { View, TextInput, Button, StyleSheet, Alert, ScrollView } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import axios from 'axios';
+
+const SignupScreen = ({ navigation }) => {
+  const [formData, setFormData] = useState({
+    full_name: '',
+    email: '',
+    password: '',
+    address: '',
+    phone_number: '',
+    short_bio: '',
+    disability: '',
+    skills: '',
+  });
+
+  const [files, setFiles] = useState({
+    resume: null,
+    profile_pic: null,
+    pwd_id_front: null,
+    pwd_id_back: null,
+  });
+
+  const pickImage = async (type) => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setFiles({ ...files, [type]: result.assets[0] });
+    }
+  };
+
+  const pickDocument = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'application/pdf',
+    });
+
+    if (result.type === 'success') {
+      setFiles({ ...files, resume: result });
+    }
+  };
+
+  const handleSubmit = async () => {
+    try {
+      const formDataToSend = new FormData();
+      
+      // Add all form fields
+      Object.keys(formData).forEach(key => {
+        formDataToSend.append(key, formData[key]);
+      });
+
+      // Add files if they exist
+      if (files.resume) {
+        formDataToSend.append('resume', {
+          uri: files.resume.uri,
+          type: 'application/pdf',
+          name: files.resume.name,
+        });
+      }
+
+      if (files.profile_pic) {
+        formDataToSend.append('profile_pic', {
+          uri: files.profile_pic.uri,
+          type: 'image/jpeg',
+          name: 'profile.jpg',
+        });
+      }
+
+      if (files.pwd_id_front) {
+        formDataToSend.append('pwd_id_front', {
+          uri: files.pwd_id_front.uri,
+          type: 'image/jpeg',
+          name: 'pwd_front.jpg',
+        });
+      }
+
+      if (files.pwd_id_back) {
+        formDataToSend.append('pwd_id_back', {
+          uri: files.pwd_id_back.uri,
+          type: 'image/jpeg',
+          name: 'pwd_back.jpg',
+        });
+      }
+
+      const response = await axios.post('http://your-api-url/signupEmployee', formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data.Status === 'Successfull') {
+        Alert.alert('Success', 'Account created successfully');
+        navigation.navigate('Login');
+      } else {
+        Alert.alert('Error', response.data.Message);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Something went wrong');
+      console.error(error);
+    }
+  };
+
+  return (
+    <ScrollView style={styles.container}>
+      <TextInput
+        style={styles.input}
+        placeholder="Full Name"
+        value={formData.full_name}
+        onChangeText={(text) => setFormData({ ...formData, full_name: text })}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Email"
+        value={formData.email}
+        onChangeText={(text) => setFormData({ ...formData, email: text })}
+        keyboardType="email-address"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Password"
+        value={formData.password}
+        onChangeText={(text) => setFormData({ ...formData, password: text })}
+        secureTextEntry
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Address"
+        value={formData.address}
+        onChangeText={(text) => setFormData({ ...formData, address: text })}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Phone Number"
+        value={formData.phone_number}
+        onChangeText={(text) => setFormData({ ...formData, phone_number: text })}
+        keyboardType="phone-pad"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Short Bio"
+        value={formData.short_bio}
+        onChangeText={(text) => setFormData({ ...formData, short_bio: text })}
+        multiline
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Disability"
+        value={formData.disability}
+        onChangeText={(text) => setFormData({ ...formData, disability: text })}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Skills (comma-separated)"
+        value={formData.skills}
+        onChangeText={(text) => setFormData({ ...formData, skills: text })}
+      />
+
+      <View style={styles.buttonContainer}>
+        <Button title="Upload Resume" onPress={pickDocument} />
+        <Button title="Upload Profile Picture" onPress={() => pickImage('profile_pic')} />
+        <Button title="Upload PWD ID Front" onPress={() => pickImage('pwd_id_front')} />
+        <Button title="Upload PWD ID Back" onPress={() => pickImage('pwd_id_back')} />
+      </View>
+
+      <Button title="Sign Up" onPress={handleSubmit} />
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 20,
+  },
+  input: {
+    height: 40,
+    borderColor: 'gray',
+    borderWidth: 1,
+    marginBottom: 10,
+    paddingHorizontal: 10,
+    borderRadius: 5,
+  },
+  buttonContainer: {
+    marginVertical: 10,
+    gap: 10,
+  },
+});
+
+export default SignupScreen;
+```
+
+3. Add the screen to your navigation:
+
+```javascript
+// App.js or your navigation configuration
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import SignupScreen from './screens/SignupScreen';
+
+const Stack = createStackNavigator();
+
+export default function App() {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator>
+        <Stack.Screen name="Signup" component={SignupScreen} />
+        {/* Add other screens here */}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+```
+
+Key features of this implementation:
+1. Single screen for all signup information
+2. File uploads for resume and images
+3. Form validation
+4. Error handling
+5. Navigation after successful signup
+6. Proper file type handling for images and PDFs
+7. Multipart form data submission
+8. Scrollable form for better mobile UX
+
+Remember to:
+1. Replace 'http://your-api-url' with your actual API URL
+2. Add proper form validation
+3. Add loading states
+4. Add proper error messages
+5. Add proper navigation flow
+6. Add proper styling to match your app's design
+7. Handle file size limits
+8. Add proper TypeScript types if using TypeScript
+
+=====================================================================================
+
+
+

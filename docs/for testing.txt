@@ -1,0 +1,250 @@
+{
+  "first_name": "Testing Name",
+  "middle_name": "Cruz",
+  "last_name": "string",
+  "email": "test12@gmail.com",
+  "password": "1122334455",
+  "disability": "Pilay",
+  "skills": [
+    "SEO","Typing","Figma"
+  ]
+}
+
+sample output endpoint @app.post("/signupEmployee"): 
+
+{
+  "Status": "Successfull",
+  "Message": "Testing Namehas been successfully signed up",
+  "Details": "data=[{'id': 20, 'user_id': 'f9b86db6-93dc-4e29-a1be-6dfcb114b8f7', 'first_name': 'Testing Name', 'middle_name': 'Cruz', 'last_name': 'string', 'disability': 'Pilay', 'skills': \"['SEO', 'Typing', 'Figma']\", 'created_at': '2025-06-03T08:15:38.142711+00:00', 'role': 'employee'}] count=None"
+}
+
+
+{
+  "first_name": "John",
+  "middle_name": "Dela",
+  "last_name": "Crixx",
+  "email": "rarara12@gmail.com",
+  "password": "1122334455"
+}
+
+sample output endpoint @app.post("/signupEmployer"): 
+
+{
+  "Status": "Successfull",
+  "Message": "Johnhas been successfully signed up",
+  "Details": "data=[{'user_id': '148cc1c6-2e81-4037-913c-7617564baa33', 'first_name': 'John', 'middle_name': 'Dela', 'last_name': 'Crixx', 'email': 'rarara12@gmail.com', 'role': 'employer', 'created_at': '2025-06-03T08:16:25.221844+00:00', 'id': 3}] count=None"
+}
+
+sample output endpoint @app.post("/login-employee"): 
+{
+  "Status": "Success",
+  "Message": "Login successful. Session stored in Redis.",
+  "App User ID": "f9b86db6-93dc-4e29-a1be-6dfcb114b8f7",
+  "Debug Session Key": "session:f9b86db6-93dc-4e29-a1be-6dfcb114b8f7",
+  "Stored User ID": "f9b86db6-93dc-4e29-a1be-6dfcb114b8f7"
+}
+
+sample output endpoint @app.post("/login-employer"):
+
+{
+  "Status": "Success",
+  "Message": "Login successful. Session stored in Redis.",
+  "App User ID": "148cc1c6-2e81-4037-913c-7617564baa33",
+  "Debug Session Key": "session:148cc1c6-2e81-4037-913c-7617564baa33",
+  "Stored User ID": "148cc1c6-2e81-4037-913c-7617564baa33"
+}
+
+sample output endpoint @app.get("/view-profile"):
+
+{
+  "Profile": {
+    "user_id": "148cc1c6-2e81-4037-913c-7617564baa33",
+    "first_name": "John",
+    "middle_name": "Dela",
+    "last_name": "Crixx",
+    "email": "rarara12@gmail.com",
+    "role": "employer",
+    "created_at": "2025-06-03T08:16:25.221844+00:00",
+    "id": 3
+  }
+}
+
+sample output endpoint @app.get("/create-jobs")
+
+{
+    "Status": "Sucessfull",
+    "Message": "Job has been created",
+    "Details": "data=[{'id': 8, 'user_id': '148cc1c6-2e81-4037-913c-7617564baa33', 'title': 'asfasfdas', 'job_description': 'asfasfas', 'skill_1': 'asfasfas', 'skill_2': 'afsfas', 'skill_3': 'striasng', 'skill_4': 'fsafasf', 'skill_5': 'asffasfas', 'pwd_friendly': True, 'created_at': '2025-06-04T06:23:51.104274+00:00'}] count=None"
+}
+
+sample output endpoint @app.get("/view-all-jobs")
+
+{
+    "jobs": [
+        {
+            "id": 11,
+            "user_id": "148cc1c6-2e81-4037-913c-7617564baa33",
+            "title": "Content Writer",
+            "job_description": "aaaafasfasfasfasf",
+            "skill_1": "SEO",
+            "skill_2": "Copywriting",
+            "skill_3": "Grammar",
+            "skill_4": "WordPress",
+            "skill_5": "Research",
+            "pwd_friendly": true,
+            "created_at": "2025-06-05T12:39:57.008087+00:00",
+            "salary": 7700
+        },
+        {
+            "id": 12,
+            "user_id": "148cc1c6-2e81-4037-913c-7617564baa33",
+            "title": "Graphic Designer 1",
+            "job_description": "zzdvdasgdvxzvzcxvcvc",
+            "skill_1": "Typography",
+            "skill_2": "Canva",
+            "skill_3": "Illustrator",
+            "skill_4": "Photoshop",
+            "skill_5": "Branding",
+            "pwd_friendly": true,
+            "created_at": "2025-06-05T12:57:21.835629+00:00",
+            "salary": 6854
+        },
+        {
+            "id": 13,
+            "user_id": "148cc1c6-2e81-4037-913c-7617564baa33",
+            "title": "Transcriptionist",
+            "job_description": "aaaaaaaaaaa",
+            "skill_1": "Grammar",
+            "skill_2": "Transcription Tools",
+            "skill_3": "Listening",
+            "skill_4": "Detail Orientation",
+            "skill_5": "Typing",
+            "pwd_friendly": false,
+            "created_at": "2025-06-05T12:57:47.917283+00:00",
+            "salary": 434
+        },
+        {
+            "id": 14,
+            "user_id": "148cc1c6-2e81-4037-913c-7617564baa33",
+            "title": "Online Tutor",
+            "job_description": "asfsafascxxxxx",
+            "skill_1": "Lesson Planning",
+            "skill_2": "Zoom",
+            "skill_3": "Subject Expertise",
+            "skill_4": "Communication",
+            "skill_5": "Patience",
+            "pwd_friendly": true,
+            "created_at": "2025-06-05T12:58:24.905731+00:00",
+            "salary": 6547
+        },
+        {
+            "id": 15,
+            "user_id": "148cc1c6-2e81-4037-913c-7617564baa33",
+            "title": "E-commerce Assistant",
+            "job_description": "sfsfsfsfsfsfssfssfs",
+            "skill_1": "Order Processing",
+            "skill_2": "Customer Service",
+            "skill_3": "Inventory Management",
+            "skill_4": "Product Listing",
+            "skill_5": "Shopify",
+            "pwd_friendly": false,
+            "created_at": "2025-06-05T12:58:42.232381+00:00",
+            "salary": 2342
+        },
+        {
+            "id": 16,
+            "user_id": "148cc1c6-2e81-4037-913c-7617564baa33",
+            "title": "Housekeepeer",
+            "job_description": "sfsfsfsfsfsfssfssfs",
+            "skill_1": "Cleaning Techniques",
+            "skill_2": "Attention to Detail",
+            "skill_3": "Time Management",
+            "skill_4": "Safety Practices",
+            "skill_5": "Organization",
+            "pwd_friendly": true,
+            "created_at": "2025-06-05T13:24:32.405627+00:00",
+            "salary": 887.23
+        }
+    ]
+}
+
+sample output endpoint @app.get("/reco-jobs")
+
+
+{
+    "recommendations": [
+        {
+            "id": 13,
+            "user_id": "148cc1c6-2e81-4037-913c-7617564baa33",
+            "title": "Transcriptionist",
+            "job_description": "aaaaaaaaaaa",
+            "skill_1": "Grammar",
+            "skill_2": "Transcription Tools",
+            "skill_3": "Listening",
+            "skill_4": "Detail Orientation",
+            "skill_5": "Typing",
+            "pwd_friendly": false,
+            "created_at": "2025-06-05T12:57:47.917283+00:00",
+            "salary": 434,
+            "skill_match_score": 0.6,
+            "matched_skills": [
+                "typing",
+                "listening",
+                "grammar"
+            ]
+        },
+        {
+            "id": 11,
+            "user_id": "148cc1c6-2e81-4037-913c-7617564baa33",
+            "title": "Content Writer",
+            "job_description": "aaaafasfasfasfasf",
+            "skill_1": "SEO",
+            "skill_2": "Copywriting",
+            "skill_3": "Grammar",
+            "skill_4": "WordPress",
+            "skill_5": "Research",
+            "pwd_friendly": true,
+            "created_at": "2025-06-05T12:39:57.008087+00:00",
+            "salary": 7700,
+            "skill_match_score": 0.4,
+            "matched_skills": [
+                "seo",
+                "grammar"
+            ]
+        },
+        {
+            "id": 16,
+            "user_id": "148cc1c6-2e81-4037-913c-7617564baa33",
+            "title": "Housekeepeer",
+            "job_description": "sfsfsfsfsfsfssfssfs",
+            "skill_1": "Cleaning Techniques",
+            "skill_2": "Attention to Detail",
+            "skill_3": "Time Management",
+            "skill_4": "Safety Practices",
+            "skill_5": "Organization",
+            "pwd_friendly": true,
+            "created_at": "2025-06-05T13:24:32.405627+00:00",
+            "salary": 887.23,
+            "skill_match_score": 0.2,
+            "matched_skills": [
+                "attention to detail"
+            ]
+        }
+    ]
+}
+
+sample output endpoint @app.get("/job/{job_id}/applicants")
+
+{
+    "Status": "Successfull",
+    "Applicants": [
+        {
+            "id": 1,
+            "user_id": "f9b86db6-93dc-4e29-a1be-6dfcb114b8f7",
+            "job_id": 16,
+            "applied": true,
+            "created_at": "2025-06-05T14:13:35.947101+00:00"
+        }
+    ]
+}
+
