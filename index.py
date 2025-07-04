@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException, File, UploadFile, Form
+from fastapi import FastAPI, Request, HTTPException, File, UploadFile, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import File, UploadFile, Depends
 from typing import List
@@ -6,6 +6,7 @@ import json
 from redis_server.redis_client import redis
 from models.model import updateEmployer, updateEmployee, loginCreds, inputSignupEmployer, inputSignupEmployee, jobCreation, updateJob
 import ast
+from datetime import datetime
 
 app = FastAPI()
 app.add_middleware(
@@ -1396,3 +1397,244 @@ async def viewDeclinedApplications(request: Request):
             "Message": "Internal Error",
             "Details": f"{e}"
         }
+    
+
+
+
+
+
+# ======== Websocket for real time chat ========
+
+# websocket manager
+#track active  connections on redis (Upstash)
+from typing import Dict
+from models.model import ChatMessage
+
+
+active_connections: Dict[str, WebSocket] = {}
+
+
+async def connect_user(websocket: WebSocket, user_id: str):
+    try:
+        await websocket.accept()
+        active_connections[user_id] = websocket
+        # fetch any offline messages amd send them
+        await send_offline_messages(user_id)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": f"Failed to connect to user {user_id}",
+            "Details": f"{e}"
+        }
+
+async def disconnect_user(websocket: WebSocket, user_id: str):
+    try:
+        if user_id in active_connections:
+            await active_connections[user_id].close()
+            del active_connections[user_id]
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": f"Failed to disconnect user {user_id}",
+            "Details": f"{e}"
+        }
+
+async def get_active_connections(user_id: str) -> WebSocket | None:
+    return active_connections.get(user_id)
+
+async def send_message(message: ChatMessage):
+    try:
+        # store message in supabase
+        supabase = create_client(url, service_key)
+        response = supabase.table("messages").insert({
+            "sender_id": message.sender_id,
+            "receiver_id": message.receiver_id,
+            "type": message.type,
+            "message": message.message,
+            "job_id": message.job_id,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute()
+
+        if not response.data:
+            return {
+                "Status": "Error",
+                "Message": "Failed to send message"
+            }
+        
+        #prepare payload for websocket
+        message_paylaod = {
+            "type": "chat_message",
+            "data": {
+                **message.model_dump(),
+                "id": response.data[0]["id"]
+            }
+        }
+
+        # if the reciver is online, send message DIRECTLY
+        reciever_websocket = await get_active_connections(message.receiver_id)
+        if reciever_websocket:
+            try:
+                await reciever_websocket.send_text(json.dumps(message_paylaod))
+            except Exception as e:
+                return {
+                    # if the sending fails, message is already in supabase db for offline retrieval
+                    "Status": "Error",
+                    "Message": "User is Offline, However Message is stored in the database"
+                }
+        
+        return{
+            "Status": "Success",
+            "Message": "Message is sent and Stored in the database",
+            "data": response.data[0]
+        }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": f"Failed to send message: {str(e)}"
+        }
+async def send_offline_messages(user_id: str):
+    # fetch and send messages that were recived while the user was offline
+    try:
+        supabase = create_client(url, service_key)
+        response = supabase.table("messages").select("*").eq("receiver_id", user_id).eq("is_read", False).order("created_at").execute()
+
+        if response.data:
+            websocket = await get_active_connections(user_id)
+            if websocket:
+                for message in response.data:
+                    message_payload = {
+                        "type": "chat_message",
+                        "data": message
+                    }
+                    await websocket.send_text(json.dumps(message_payload))
+
+                    #mark messages read
+                    message_ids = [message["id"] for message in response.data]
+                    supabase.table("messages").update({
+                        "is_read": True
+                    }).in_("id", message_ids).execute()
+
+            return {
+                "Status": "Success",
+                "Message": "Offline messages sent"
+            }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Failed to send offline messages",
+            "Details": f"{e}"
+        }
+
+# websocket endpoint
+async def get_user_id_from_token(token: str) -> str:
+    """Validate token and get user_id from Upstash Redis"""
+    try:
+        if not token:
+            raise WebSocketDisconnect(reason="Missing token")
+        
+        # Get session data from Upstash Redis
+        value = await redis.get(token)
+        if not value:
+            raise WebSocketDisconnect(reason="Invalid or expired token")
+        
+        try:
+            session_data = json.loads(value)
+            auth_user_id = session_data.get("auth_userID")
+            if not auth_user_id:
+                raise WebSocketDisconnect(reason="Invalid session data")
+            return auth_user_id
+        except json.JSONDecodeError:
+            raise WebSocketDisconnect(reason="Corrupted session data")
+            
+    except Exception as e:
+        if isinstance(e, WebSocketDisconnect):
+            raise e
+        raise WebSocketDisconnect(reason=f"Authentication error: {str(e)}")
+
+@app.websocket("/ws/chat/{user_id}")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    user_id: str,
+    token: str = None
+):
+    print(f"WebSocket connection attempt for user_id: {user_id}")  # Debug log
+    try:
+        # Validate token and get authenticated user ID
+        if not token:
+            print("No token provided")  # Debug log
+            await websocket.close(code=4001, reason="Missing authentication token")
+            return
+            
+        print("Validating token...")  # Debug log
+        try:
+            auth_user_id = await get_user_id_from_token(token)
+            print(f"Token validated for user: {auth_user_id}")  # Debug log
+        except WebSocketDisconnect as e:
+            print(f"WebSocket disconnect during auth: {str(e)}")  # Debug log
+            await websocket.close(code=4002, reason=str(e))
+            return
+        except Exception as e:
+            print(f"Authentication error: {str(e)}")  # Debug log
+            await websocket.close(code=4500, reason="Internal authentication error")
+            return
+        
+        # Verify the user_id matches the token
+        if auth_user_id != user_id:
+            print(f"User ID mismatch: {auth_user_id} != {user_id}")  # Debug log
+            await websocket.close(code=4003, reason="User ID mismatch")
+            return
+        
+        print("Accepting connection...")  # Debug log
+        # Store WebSocket connection
+        await connect_user(websocket, user_id)
+        print("Connection accepted and stored")  # Debug log
+        
+        while True:
+            try:
+                data = await websocket.receive_text()
+                print(f"Received message from {user_id}: {data[:100]}...")  # Debug log (first 100 chars)
+                message_data = json.loads(data)
+                
+                # Create ChatMessage instance with validation
+                chat_message = ChatMessage(**message_data)
+                
+                # Verify sender_id matches authenticated user
+                if chat_message.sender_id != auth_user_id:
+                    # print(f"Sender ID mismatch: {chat_message.sender_id} != {auth_user_id}")  # Debug log
+                    await websocket.send_json({
+                        "Status": "Error",
+                        "Message": "Unauthorized: sender_id does not match authenticated user"
+                    })
+                    continue
+                
+                # Handle incoming messages
+                result = await send_message(chat_message)
+                # print(f"Message processed with result: {result}")  # Debug log
+                
+                # Send acknowledgment back to client
+                await websocket.send_json(result)
+                
+            except json.JSONDecodeError:
+                # print("Invalid JSON received")  # Debug log
+                await websocket.send_json({
+                    "Status": "Error",
+                    "Message": "Invalid message format"
+                })
+            except Exception as e:
+                # print(f"Error processing message: {str(e)}")  # Debug log
+                await websocket.send_json({
+                    "Status": "Error",
+                    "Message": f"Message processing error: {str(e)}"
+                })
+                
+    except WebSocketDisconnect:
+        # print(f"WebSocket disconnected for user: {user_id}")  # Debug log
+        await disconnect_user(websocket, user_id)
+    except Exception as e:
+        print(f"WebSocket error: {str(e)}")
+        await disconnect_user(websocket, user_id)
+    finally:
+        # Ensure connection is removed from active_connections
+        if user_id in active_connections:
+            del active_connections[user_id]
+        # print(f"Cleaned up connection for user: {user_id}")  # Debug log

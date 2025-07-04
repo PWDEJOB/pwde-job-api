@@ -1,5 +1,8 @@
 from pydantic import BaseModel
 from typing import List
+from datetime import datetime
+from uuid import UUID
+from typing import Literal
 
 class inputSignupEmployee(BaseModel):
     full_name: str
@@ -75,3 +78,10 @@ class updateJob(BaseModel):
     pwd_friendly: bool
     min_salary: float
     max_salary: float
+
+class ChatMessage(BaseModel):
+    sender_id: str
+    receiver_id: str
+    job_id: str
+    type: Literal["text","zoom_link","form_link","status_update"]
+    message: str
