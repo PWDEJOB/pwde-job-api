@@ -78,6 +78,22 @@ async def preload(request: Request):
             "Details": str(e)
         }
 
+#Password reset to be followded after this week
+
+# To send an authenticated request to the backend (e.g., /view-profile):
+# Retrieve the access token (from localStorage, sessionStorage, or cookies).
+# Add it to the request header as: Authorization: Bearer <access_token>.
+
+# Example (using Fetch API):
+#   
+#    const accessToken = localStorage.getItem('access_token'); // or from a cookie
+#   
+#    fetch('http://localhost:8000/view-profile', {
+#      method: 'GET',
+#      headers: {
+#        'Authorization': `Bearer ${accessToken}`
+# }
+# })
 
 # functions for retriving session or to be speficifc the user ID
 async def getAuthUserIdByToken(redis, access_token):
@@ -103,8 +119,8 @@ async def getAuthUserIdFromRequest(redis, request: Request):
 
 #Authentication Process
 
-# Signup for employee and employer
-@app.post("/signupEmployee") # signup for employee
+# Signup and login for employee and employer
+@app.post("/employee/signup") # signup for employee
 async def signUp(
     full_name: str = Form(...),
     email: str = Form(...),
@@ -267,8 +283,63 @@ async def signUp(
                 "Details": f"{e}"
             }
 
+@app.post("/employee/login") # login employee
+async def login(user: loginCreds):
+    supabase: Client = create_client(url, key)
+    try:
+        response = supabase.auth.sign_in_with_password(
+            {
+                "email": user.email,
+                "password": user.password
+            }
+        )
 
-@app.post("/signupEmployer") # signup for employer
+        # Get the session
+        session_key = response.session
+
+        if session_key:
+            access_token = session_key.access_token
+            refresh_token = session_key.refresh_token
+            auth_userID = response.user.id
+
+            session_data = {
+                "auth_userID": auth_userID,
+                "refresh_token": refresh_token
+            }
+
+            # Check if the user is in the employee table
+            employee_check = supabase.table("employee").select("*").eq("user_id", auth_userID).single().execute()
+
+            if employee_check.data:  # check for presence of data
+                # Store session in Redis with a key prefix
+                await redis.set(access_token, json.dumps(session_data), ex=None)
+
+                return {
+                    "Status": "Success",
+                    "Message": "Login successful. Session stored in Redis.",
+                    "Token": access_token,
+                    "Stored User ID": auth_userID
+                }
+            else:
+                return {
+                    "Status": "ERROR",
+                    "Message": "User is not an employee"
+                }
+        else:
+            return {
+                "Status": "ERROR",
+                "Message": "No session returned"
+            }
+
+    except Exception as e:
+        return {
+            "Status": "ERROR",
+            "Message": "Internal Server Error",
+            "Details": str(e)
+        }
+
+
+@app.post("/employer/signup") # signup for employer
 async def signUp(
     email: str = Form(...),
     password: str = Form(...),
@@ -369,70 +440,8 @@ async def signUp(
                 "Message:":"Internal error. Data insertion failed",
                 "Details": f"{e}"
             }
-
-
-
-
-
-#On this login, auth_userID needs to be retrieve on the client side emaning frontend so it can be use on the other endpoints
-        
-@app.post("/login-employee")
-async def login(user: loginCreds):
-    supabase: Client = create_client(url, key)
-    try:
-        response = supabase.auth.sign_in_with_password(
-            {
-                "email": user.email,
-                "password": user.password
-            }
-        )
-
-        # Get the session
-        session_key = response.session
-
-        if session_key:
-            access_token = session_key.access_token
-            refresh_token = session_key.refresh_token
-            auth_userID = response.user.id
-
-            session_data = {
-                "auth_userID": auth_userID,
-                "refresh_token": refresh_token
-            }
-
-            # Check if the user is in the employee table
-            employee_check = supabase.table("employee").select("*").eq("user_id", auth_userID).single().execute()
-
-            if employee_check.data:  # check for presence of data
-                # Store session in Redis with a key prefix
-                await redis.set(access_token, json.dumps(session_data), ex=None)
-
-                return {
-                    "Status": "Success",
-                    "Message": "Login successful. Session stored in Redis.",
-                    "Token": access_token,
-                    "Stored User ID": auth_userID
-                }
-            else:
-                return {
-                    "Status": "ERROR",
-                    "Message": "User is not an employee"
-                }
-        else:
-            return {
-                "Status": "ERROR",
-                "Message": "No session returned"
-            }
-
-    except Exception as e:
-        return {
-            "Status": "ERROR",
-            "Message": "Internal Server Error",
-            "Details": str(e)
-        }
-
          
-@app.post("/login-employer")
+@app.post("/employer/login") # login employer
 async def login(user: loginCreds):
     supabase: Client = create_client(url, key)
     try:
@@ -487,26 +496,8 @@ async def login(user: loginCreds):
             "Details": str(e)
         }
 
-        
-#Password reset to be followded after this week
-
-# To send an authenticated request to the backend (e.g., /view-profile):
-# Retrieve the access token (from localStorage, sessionStorage, or cookies).
-# Add it to the request header as: Authorization: Bearer <access_token>.
-
-# Example (using Fetch API):
-#   
-#    const accessToken = localStorage.getItem('access_token'); // or from a cookie
-#   
-#    fetch('http://localhost:8000/view-profile', {
-#      method: 'GET',
-#      headers: {
-#        'Authorization': `Bearer ${accessToken}`
-# }
-# })
-
 #profile management
-@app.get("/view-profile")
+@app.get("/profile/view-profile") # view profile
 async def viewProfile(request: Request):
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
@@ -542,7 +533,7 @@ async def viewProfile(request: Request):
 # Profile Update
 #this will update only name, skills, and disability 
 
-@app.post("/update-profile/employer")
+@app.post("/profile/employer/update-profile")
 async def updateProfile(
     request: Request,
     company_name: str = Form(None),
@@ -656,9 +647,7 @@ async def updateProfile(
             "Details": f"{e}"
         }
 
-
-
-@app.post("/update-profile/employee")
+@app.post("/profile/employee/update-profile")
 async def updateProfile(
     request: Request,
     full_name: str = Form(None),
@@ -788,7 +777,7 @@ async def updateProfile(
 #create jobs
 # This endpoint is for empployers to be able create jobs, view al jobs listings they created, view a specific job listinsg details, delete, and update
 
-@app.post("/create-jobs")
+@app.post("/jobs/create-jobs")
 async def createJob(job: jobCreation, request: Request):
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
@@ -836,7 +825,7 @@ async def createJob(job: jobCreation, request: Request):
             "Details": f"{e}"
         }
 
-@app.get("/view-all-jobs")
+@app.get("/jobs/view-all-jobs")
 async def viewAllJobs(request: Request):
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
@@ -858,7 +847,7 @@ async def viewAllJobs(request: Request):
             "Details": f"{e}"
         }
 
-@app.get("/view-job/{id}")
+@app.get("/jobs/view-job/{id}")
 async def viewSpecificJob(id: str):
     try:
         # auth_userID = await getAuthUserIdFromRequest(redis, request) .eq("user_id", auth_userID)
@@ -883,7 +872,8 @@ async def viewSpecificJob(id: str):
             "Message": "Internal Error",
             "Details": f"{e}"
         }
-@app.post("/delete-job/{id}")
+
+@app.post("/jobs/delete-job/{id}")
 async def deleteJob(request: Request, id: str):
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
@@ -920,7 +910,7 @@ async def deleteJob(request: Request, id: str):
             "Details": f"{e}"
         }
         
-@app.post("/update-job/{id}")
+@app.post("/jobs/update-job/{id}")
 async def updateSpecificJob(request: Request, id: str, job: updateJob):
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
@@ -1084,7 +1074,7 @@ async def applyingForJob(job_id: str, request: Request):
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
         
-        supabase = create_client(url, key)
+        supabase = create_client(url, service_key)
         
         # check the user id in auth)userID is an employer
         
@@ -1095,18 +1085,22 @@ async def applyingForJob(job_id: str, request: Request):
             
             if apply_job.data:
                 supabase_job_data_insertion = create_client(url, service_key)
-                
+                #get the user details
+                user_details = supabase.table("employee").select("*").eq("user_id", auth_userID).single().execute()
                 job_data = {
                     "user_id": auth_userID,
                     "job_id": job_id,
-                    "status": "under_review"
+                    "status": "under_review",
+                    "applicant_details": user_details.data
                 }
+
+                # add arkha matching scoring here soon POGGGGGGGGG
                 
                 insert_job_appliead = supabase_job_data_insertion.table("job_applications").insert(job_data).execute()
                 return{
                     "Status": "Successfull",
                     "Message": f"You applied to job {job_id}",
-                    "Details": insert_job_appliead.data
+                    "Details": insert_job_appliead.data,
                 }
             else:
                 return {
@@ -1126,7 +1120,7 @@ async def applyingForJob(job_id: str, request: Request):
         }
 
 # view all apllicants of a job listing
-@app.get("/job/{job_id}/applicants")
+@app.get("/view-applicants/{job_id}")
 async def viewAllApplicantsInJobListing(request: Request, job_id: str):
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
@@ -1372,7 +1366,7 @@ async def declineApplication(request: Request, application_id: str):
             "Details": f"{e}"
         }
 
-@app.get("/declined-applications")
+@app.get("/get-declined-applications")
 async def viewDeclinedApplications(request: Request):
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
