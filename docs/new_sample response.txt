@@ -1,38 +1,32 @@
-Applyng for job new response:
-
 {
-    "Status": "Successfull",
-    "Message": "You applied to job 23",
-    "Details": [
-        {
-            "id": 12,
-            "user_id": "fb858d83-fac8-4086-9218-33f0932b60e0",
-            "job_id": 23,
-            "status": "under_review",
-            "created_at": "2025-07-04T07:56:28.886048+00:00",
-            "applicant_details": "{\"id\":33,\"user_id\":\"fb858d83-fac8-4086-9218-33f0932b60e0\",\"full_name\":\"Tester TEST\",\"disability\":\"Pilay\",\"skills\":\"AWS, Figma, Java, Typing, Organizing\",\"created_at\":\"2025-07-04T07:14:20.048208+00:00\",\"role\":\"employee\",\"resume_url\":\"https://pyakerdijdkscgtalugu.supabase.co/storage/v1/object/public/resumes/resumes/fb858d83-fac8-4086-9218-33f0932b60e0/CoverLetter.pdf?\",\"profile_pic_url\":\"https://pyakerdijdkscgtalugu.supabase.co/storage/v1/object/public/profilepic/profilepic/fb858d83-fac8-4086-9218-33f0932b60e0/77.jpg?\",\"address\":\"ewetyuio\",\"phone_number\":\"13124124512\",\"short_bio\":\"safasgasgas\",\"pwd_id_front_url\":\"https://pyakerdijdkscgtalugu.supabase.co/storage/v1/object/public/pwdidfront/pwdidfront/fb858d83-fac8-4086-9218-33f0932b60e0/0_B-dWKnx-oFPKpQoc.png?\",\"pwd_id_back_url\":\"https://pyakerdijdkscgtalugu.supabase.co/storage/v1/object/public/pwdidback/pwdidback/fb858d83-fac8-4086-9218-33f0932b60e0/0_B-dWKnx-oFPKpQoc.png?\",\"email\":\"qwer@gmail.com\"}"
-        }
-    ]
+  "Status": "Success",
+  "Message": "Chat history fetched successfully",
+  "data": [
+    {
+      "id": 2,
+      "job_id": 24,
+      "sender_id": "a14887b6-6292-4fd9-85c7-8cd821c19d22",
+      "receiver_id": "f5cf5a60-f6d7-4754-b7cc-31ed083b0dd3",
+      "message": "test",
+      "type": "text",
+      "created_at": "2025-07-14T05:18:39.50607+00:00",
+      "is_read": false
+    },
+    {
+      "id": 3,
+      "job_id": 24,
+      "sender_id": "a14887b6-6292-4fd9-85c7-8cd821c19d22",
+      "receiver_id": "f5cf5a60-f6d7-4754-b7cc-31ed083b0dd3",
+      "message": "LALALA",
+      "type": "text",
+      "created_at": "2025-07-14T05:20:37.308868+00:00",
+      "is_read": false
+    }
+  ]
 }
 
-OLD ENDPOINT NMES    new endpoint names
-/signupEmployee --> /employee/signup
-/signupEmployer --> /employer/signup
-/login-employee --> /employee/login
-/login-employer  --> /employer/login 
-/view-profile -- > /profile/view-profile
-/update-profile/employer -- > /profile/employer/update-profile
-/update-profile/employee --> /profile/employee/update-profile
-/create-jobs --> /jobs/create-jobs
-/view-all-jobs --> /jobs/view-all-jobs
-/view-job/{id} --> /jobs/view-job/{id}
-/delete-job/{id} --> /jobs/delete-job/{id}
-/update-job/{id} --> /jobs/update-job/{id}
-/job/{job_id}/applicants --> /view-applicants/{job_id}
-
-/declined-applications --> /get-declined-applications
-
-
-
-
-
+If no chat hsitory:
+{
+    "Status": "Error",
+    "Message": "No chat history found",
+}

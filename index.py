@@ -1632,3 +1632,28 @@ async def websocket_endpoint(
         if user_id in active_connections:
             del active_connections[user_id]
         # print(f"Cleaned up connection for user: {user_id}")  # Debug log
+
+#get the chat history
+@app.get("/messages/{sender_id}/{receiver_id}")
+async def get_chat_history(sender_id: str, reciever_id: str):
+    try:
+        supabase = create_client(url, service_key)
+        response = supabase.table("messages").select("*").eq("sender_id", sender_id).eq("receiver_id", reciever_id).order("created_at").execute()
+
+        if response.data:
+            return {
+                "Status": "Success",
+                "Message": "Chat history fetched successfully",
+                "data": response.data
+            }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "No chat history found",
+            }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Failed to fetch chat history",
+            "Details": f"{e}"
+        }

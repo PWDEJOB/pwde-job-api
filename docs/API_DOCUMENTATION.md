@@ -6,8 +6,9 @@
 3. [Employer Endpoints](#employer-endpoints)
 4. [Job Management Endpoints](#job-management-endpoints)
 5. [Application Management Endpoints](#application-management-endpoints)
-6. [Error Handling](#error-handling)
-7. [Frontend Implementation Tips](#frontend-implementation-tips)
+6. [Real-time Chat Communication](#real-time-chat-communication)
+7. [Error Handling](#error-handling)
+8. [Frontend Implementation Tips](#frontend-implementation-tips)
 
 ---
 
@@ -16,7 +17,7 @@
 ### Authentication
 
 #### Employee Signup
-- **Endpoint**: `POST /signupEmployee`
+- **Endpoint**: `POST /employee/signup`
 - **Description**: Register a new employee account. Supports all profile fields and file uploads in a single step. Uses `multipart/form-data`.
 - **Request (multipart/form-data)**:
   - `full_name` (string, required)
@@ -34,7 +35,7 @@
 
 - **Sample Request (curl)**:
 ```bash
-curl -X POST "http://your-api-url/signupEmployee" \
+curl -X POST "http://your-api-url/employee/signup" \
   -H "accept: application/json" \
   -H "Content-Type: multipart/form-data" \
   -F "full_name=Richard Gomex" \
@@ -88,7 +89,7 @@ curl -X POST "http://your-api-url/signupEmployee" \
     // ...other fields
     formData.append('resume', { uri: resume.uri, type: 'application/pdf', name: resume.name });
     formData.append('profile_pic', { uri: profilePic.uri, type: 'image/jpeg', name: 'profile.jpg' });
-    await fetch('http://your-api-url/signupEmployee', { method: 'POST', body: formData });
+    await fetch('http://your-api-url/employee/signup', { method: 'POST', body: formData });
     ```
   - Always check file size and type before upload.
   - Omit fields you don't want to set.
@@ -96,7 +97,7 @@ curl -X POST "http://your-api-url/signupEmployee" \
 ---
 
 #### Employer Signup
-- **Endpoint**: `POST /signupEmployer`
+- **Endpoint**: `POST /employer/signup`
 - **Description**: Register a new employer account. Supports company logo upload. Uses `multipart/form-data`.
 - **Request (multipart/form-data)**:
   - `email` (string, required)
@@ -114,7 +115,7 @@ curl -X POST "http://your-api-url/signupEmployee" \
 
 - **Sample Request (curl)**:
 ```bash
-curl -X POST "http://your-api-url/signupEmployer" \
+curl -X POST "http://your-api-url/employer/signup" \
   -H "accept: application/json" \
   -H "Content-Type: multipart/form-data" \
   -F "email=test12@gmail.com" \
@@ -148,7 +149,7 @@ curl -X POST "http://your-api-url/signupEmployer" \
     formData.append('email', 'test12@gmail.com');
     // ...other fields
     formData.append('file', logoFile);
-    await axios.post('http://your-api-url/signupEmployer', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    await axios.post('http://your-api-url/employer/signup', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
     ```
   - Validate file type and size before upload.
   - Omit fields you don't want to set.
@@ -156,7 +157,7 @@ curl -X POST "http://your-api-url/signupEmployer" \
 ---
 
 #### Employee Login
-- **Endpoint**: `POST /login-employee`
+- **Endpoint**: `POST /employee/login`
 - **Description**: Authenticate an employee and create a session. Returns an access token for subsequent requests.
 - **Request (JSON)**:
   ```json
@@ -168,7 +169,7 @@ curl -X POST "http://your-api-url/signupEmployer" \
 
 - **Sample Request (curl)**:
   ```bash
-  curl -X POST "http://your-api-url/login-employee" \
+  curl -X POST "http://your-api-url/employee/login" \
     -H "Content-Type: application/json" \
     -d '{
       "email": "test12@gmail.com",
@@ -199,7 +200,7 @@ curl -X POST "http://your-api-url/signupEmployer" \
   ```javascript
   const loginEmployee = async (email, password) => {
     try {
-      const response = await fetch('http://your-api-url/login-employee', {
+      const response = await fetch('http://your-api-url/employee/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -230,7 +231,7 @@ curl -X POST "http://your-api-url/signupEmployer" \
 ---
 
 #### Employer Login
-- **Endpoint**: `POST /login-employer`
+- **Endpoint**: `POST /employer/login`
 - **Description**: Authenticate an employer and create a session. Returns an access token for subsequent requests.
 - **Request (JSON)**:
   ```json
@@ -242,7 +243,7 @@ curl -X POST "http://your-api-url/signupEmployer" \
 
 - **Sample Request (curl)**:
   ```bash
-  curl -X POST "http://your-api-url/login-employer" \
+  curl -X POST "http://your-api-url/employer/login" \
     -H "Content-Type: application/json" \
     -d '{
       "email": "rarara12@gmail.com",
@@ -265,7 +266,7 @@ curl -X POST "http://your-api-url/signupEmployer" \
   ```javascript
   const loginEmployer = async (email, password) => {
     try {
-      const response = await fetch('http://your-api-url/login-employer', {
+      const response = await fetch('http://your-api-url/employer/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -348,7 +349,7 @@ curl -X POST "http://your-api-url/signupEmployer" \
 ### Profile Management
 
 #### View Profile
-- **Endpoint**: `GET /view-profile`
+- **Endpoint**: `GET /profile/view-profile`
 - **Description**: Get the current user's profile information. Works for both employees and employers.
 - **Headers Required**: 
   - `Authorization: Bearer <access_token>`
@@ -356,7 +357,7 @@ curl -X POST "http://your-api-url/signupEmployer" \
 
 - **Sample Request (curl)**:
   ```bash
-  curl -X GET "http://your-api-url/view-profile" \
+  curl -X GET "http://your-api-url/profile/view-profile" \
     -H "Authorization: Bearer <access_token>"
   ```
 
@@ -412,7 +413,7 @@ curl -X POST "http://your-api-url/signupEmployer" \
     try {
       const token = localStorage.getItem('sessionKey'); // or AsyncStorage for React Native
       
-      const response = await fetch('http://your-api-url/view-profile', {
+      const response = await fetch('http://your-api-url/profile/view-profile', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -439,7 +440,7 @@ curl -X POST "http://your-api-url/signupEmployer" \
 ### Profile Management
 
 #### Update Employee Profile
-- **Endpoint**: `POST /update-profile/employee`
+- **Endpoint**: `POST /profile/employee/update-profile`
 - **Description**: Update an employee's profile information. All fields except PWD ID Front and PWD ID Back can be updated. Resume and profile picture can be uploaded. Only non-empty fields are updated; omitted or empty fields are ignored and not overwritten.
 - **Headers Required**: 
   - `Authorization: Bearer <access_token>`
@@ -455,7 +456,7 @@ curl -X POST "http://your-api-url/signupEmployer" \
 
 - **Sample Request (curl)**:
 ```bash
-curl -X POST "http://your-api-url/update-profile/employee" \
+curl -X POST "http://your-api-url/profile/employee/update-profile" \
   -H "Authorization: Bearer <access_token>" \
   -F "full_name=Richard Gomex" \
   -F "address=Quezon City" \
@@ -505,7 +506,7 @@ curl -X POST "http://your-api-url/update-profile/employee" \
   - **React Native Tip:** Use the same `FormData` approach as signup. Omit fields you don't want to update.
 
 #### Update Employer Profile
-- **Endpoint**: `POST /update-profile/employer`
+- **Endpoint**: `POST /profile/employer/update-profile`
 - **Description**: Update an employer's profile information. All fields from signup can be updated, including company logo. Only non-empty fields are updated; omitted or empty fields are ignored and not overwritten.
 - **Headers Required**: 
   - `Authorization: Bearer <access_token>`
@@ -523,7 +524,7 @@ curl -X POST "http://your-api-url/update-profile/employee" \
 
 - **Sample Request (curl)**:
 ```bash
-curl -X POST "http://your-api-url/update-profile/employer" \
+curl -X POST "http://your-api-url/profile/employer/update-profile" \
   -H "Authorization: Bearer <access_token>" \
   -F "company_name=BlaBla Inc." \
   -F "company_level=Medium" \
@@ -868,7 +869,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
 ### Job Management
 
 #### Create Job
-- **Endpoint**: `POST /create-jobs`
+- **Endpoint**: `POST /jobs/create-jobs`
 - **Description**: Create a new job listing. Only employers can create jobs.
 - **Headers Required**: 
   - `Authorization: Bearer <access_token>`
@@ -895,7 +896,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
 
 - **Sample Request (curl)**:
   ```bash
-  curl -X POST "http://your-api-url/create-jobs" \
+  curl -X POST "http://your-api-url/jobs/create-jobs" \
     -H "Authorization: Bearer <access_token>" \
     -H "Content-Type: application/json" \
     -d '{
@@ -932,7 +933,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
     try {
       const token = localStorage.getItem('sessionKey');
       
-      const response = await fetch('http://your-api-url/create-jobs', {
+      const response = await fetch('http://your-api-url/jobs/create-jobs', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -958,7 +959,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
 ---
 
 #### View All Jobs
-- **Endpoint**: `GET /view-all-jobs`
+- **Endpoint**: `GET /jobs/view-all-jobs`
 - **Description**: Get all job listings created by the current employer.
 - **Headers Required**: 
   - `Authorization: Bearer <access_token>`
@@ -966,7 +967,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
 
 - **Sample Request (curl)**:
   ```bash
-  curl -X GET "http://your-api-url/view-all-jobs" \
+  curl -X GET "http://your-api-url/jobs/view-all-jobs" \
     -H "Authorization: Bearer <access_token>"
   ```
 
@@ -1004,7 +1005,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
     try {
       const token = localStorage.getItem('sessionKey');
       
-      const response = await fetch('http://your-api-url/view-all-jobs', {
+      const response = await fetch('http://your-api-url/jobs/view-all-jobs', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1029,7 +1030,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
 ---
 
 #### View Specific Job
-- **Endpoint**: `GET /view-job/{id}`
+- **Endpoint**: `GET /jobs/view-job/{id}`
 - **Description**: Get details of a specific job listing.
 - **Headers Required**: 
   - `Authorization: Bearer <access_token>`
@@ -1039,7 +1040,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
 
 - **Sample Request (curl)**:
   ```bash
-  curl -X GET "http://your-api-url/view-job/16" \
+  curl -X GET "http://your-api-url/jobs/view-job/16" \
     -H "Authorization: Bearer <access_token>"
   ```
 
@@ -1076,7 +1077,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
 ---
 
 #### Update Job
-- **Endpoint**: `POST /update-job/{id}`
+- **Endpoint**: `POST /jobs/update-job/{id}`
 - **Description**: Update an existing job listing.
 - **Headers Required**: 
   - `Authorization: Bearer <access_token>`
@@ -1086,7 +1087,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
 
 - **Sample Request (curl)**:
   ```bash
-  curl -X POST "http://your-api-url/update-job/16" \
+  curl -X POST "http://your-api-url/jobs/update-job/16" \
     -H "Authorization: Bearer <access_token>" \
     -H "Content-Type: application/json" \
     -d '{
@@ -1111,7 +1112,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
 ---
 
 #### Delete Job
-- **Endpoint**: `POST /delete-job/{id}`
+- **Endpoint**: `POST /jobs/delete-job/{id}`
 - **Description**: Delete a job listing.
 - **Headers Required**: 
   - `Authorization: Bearer <access_token>`
@@ -1121,7 +1122,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
 
 - **Sample Request (curl)**:
   ```bash
-  curl -X POST "http://your-api-url/delete-job/16" \
+  curl -X POST "http://your-api-url/jobs/delete-job/16" \
     -H "Authorization: Bearer <access_token>"
   ```
 
@@ -1130,7 +1131,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
 ### Application Management
 
 #### View Job Applicants
-- **Endpoint**: `GET /job/{job_id}/applicants`
+- **Endpoint**: `GET /view-applicants/{job_id}`
 - **Description**: Get all applicants for a specific job listing.
 - **Headers Required**: 
   - `Authorization: Bearer <access_token>`
@@ -1140,7 +1141,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
 
 - **Sample Request (curl)**:
   ```bash
-  curl -X GET "http://your-api-url/job/16/applicants" \
+  curl -X GET "http://your-api-url/view-applicants/16" \
     -H "Authorization: Bearer <access_token>"
   ```
 
@@ -1166,7 +1167,7 @@ curl -X POST "http://your-api-url/update-profile/employer" \
     try {
       const token = localStorage.getItem('sessionKey');
       
-      const response = await fetch(`http://your-api-url/job/${jobId}/applicants`, {
+      const response = await fetch(`http://your-api-url/view-applicants/${jobId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1251,6 +1252,625 @@ curl -X POST "http://your-api-url/update-profile/employer" \
 
 ---
 
+#### Decline Application
+- **Endpoint**: `POST /decline-application/{application_id}`
+- **Description**: Decline a specific job application. This sets the application status to "rejected".
+- **Headers Required**: 
+  - `Authorization: Bearer <access_token>`
+- **Parameters**:
+  - `application_id` (path parameter, required) - The ID of the application to decline
+- **Request**: No body required
+
+- **Sample Request (curl)**:
+  ```bash
+  curl -X POST "http://your-api-url/decline-application/5" \
+    -H "Authorization: Bearer <access_token>"
+  ```
+
+- **Sample Response**:
+  ```json
+  {
+    "Status": "Successfull",
+    "Message": "Application declined successfully",
+    "Application": {
+      "id": 5,
+      "user_id": "f9b86db6-93dc-4e29-a1be-6dfcb114b8f7",
+      "job_id": 16,
+      "status": "rejected",
+      "created_at": "2025-06-05T14:13:35.947101+00:00",
+      "updated_at": "2025-06-06T10:30:00.000000+00:00"
+    }
+  }
+  ```
+
+- **Error Response**:
+  ```json
+  {
+    "Status": "Error",
+    "Message": "Application not found"
+  }
+  ```
+
+- **Web Implementation**:
+  ```javascript
+  const declineApplication = async (applicationId) => {
+    try {
+      const token = localStorage.getItem('sessionKey');
+      
+      const response = await fetch(`http://your-api-url/decline-application/${applicationId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.Status === 'Successfull') {
+        return data;
+      } else {
+        throw new Error(data.Message);
+      }
+    } catch (error) {
+      console.error('Decline application error:', error);
+      throw error;
+    }
+  };
+  ```
+
+---
+
+#### Get Declined Applications
+- **Endpoint**: `GET /get-declined-applications`
+- **Description**: Get all declined job applications for the current employer. Returns applications that have been rejected.
+- **Headers Required**: 
+  - `Authorization: Bearer <access_token>`
+- **Request**: No body required
+
+- **Sample Request (curl)**:
+  ```bash
+  curl -X GET "http://your-api-url/get-declined-applications" \
+    -H "Authorization: Bearer <access_token>"
+  ```
+
+- **Sample Response**:
+  ```json
+  {
+    "Status": "Successfull",
+    "Message": "Declined applications retrieved successfully",
+    "Applications": [
+      {
+        "id": 5,
+        "user_id": "f9b86db6-93dc-4e29-a1be-6dfcb114b8f7",
+        "job_id": 16,
+        "status": "rejected",
+        "created_at": "2025-06-05T14:13:35.947101+00:00",
+        "updated_at": "2025-06-06T10:30:00.000000+00:00",
+        "applicant_details": {
+          "full_name": "John Doe",
+          "email": "john.doe@example.com",
+          "skills": "JavaScript, React, Node.js",
+          "disability": "None",
+          "resume_url": "https://example.com/resume.pdf"
+        },
+        "job_details": {
+          "title": "Software Developer",
+          "company_name": "TechCorp",
+          "location": "Remote"
+        }
+      }
+    ]
+  }
+  ```
+
+- **Error Response**:
+  ```json
+  {
+    "Status": "Error",
+    "Message": "No declined applications found"
+  }
+  ```
+
+- **Web Implementation**:
+  ```javascript
+  const getDeclinedApplications = async () => {
+    try {
+      const token = localStorage.getItem('sessionKey');
+      
+      const response = await fetch('http://your-api-url/get-declined-applications', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.Status === 'Successfull') {
+        return data.Applications;
+      } else {
+        throw new Error(data.Message);
+      }
+    } catch (error) {
+      console.error('Declined applications fetch error:', error);
+      throw error;
+    }
+  };
+  ```
+
+---
+
+## Real-time Chat Communication
+
+### WebSocket Chat Connection
+- **Endpoint**: `WebSocket /ws/chat/{user_id}?token={access_token}`
+- **Description**: Establishes a WebSocket connection for real-time chat between employers and employees. Handles both online and offline messaging with persistent storage.
+- **Parameters**:
+  - `user_id` (path parameter, required) - The ID of the connecting user
+  - `token` (query parameter, required) - The authentication token from login
+
+- **Sample Connection (JavaScript)**:
+```javascript
+const token = "your_auth_token";
+const userId = "your_user_id";
+const ws = new WebSocket(`ws://your-api-url/ws/chat/${userId}?token=${token}`);
+
+ws.onopen = () => {
+  console.log('Connected to chat');
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Received message:', data);
+};
+
+ws.onerror = (error) => {
+  console.error('WebSocket error:', error);
+};
+
+ws.onclose = (event) => {
+  console.log('Disconnected from chat:', event.reason);
+};
+```
+
+### Sending Messages
+- **Message Format**:
+```json
+{
+  "sender_id": "user_id_of_sender",
+  "receiver_id": "user_id_of_receiver",
+  "job_id": "related_job_id",
+  "type": "text",
+  "message": "Hello, this is a test message!"
+}
+```
+
+- **Message Types**:
+  - `"text"` - Regular text message
+  - `"zoom_link"` - Zoom meeting link
+  - `"form_link"` - Form or document link
+  - `"status_update"` - Application status update
+
+- **Sample Message Send**:
+```javascript
+ws.send(JSON.stringify({
+  "sender_id": "sender_user_id",
+  "receiver_id": "receiver_user_id",
+  "job_id": "123",
+  "type": "text",
+  "message": "Hello!"
+}));
+```
+
+### Message Response Format
+- **Success Response**:
+```json
+{
+  "Status": "Success",
+  "Message": "Message is sent and Stored in the database",
+  "data": {
+    "id": "message_id",
+    "sender_id": "sender_user_id",
+    "receiver_id": "receiver_user_id",
+    "job_id": "123",
+    "type": "text",
+    "message": "Hello!",
+    "created_at": "2025-06-15T10:30:00Z"
+  }
+}
+```
+
+- **Error Response**:
+```json
+{
+  "Status": "Error",
+  "Message": "Error message here"
+}
+```
+
+### React Native Implementation
+```javascript
+class ChatService {
+  constructor(userId, token) {
+    this.userId = userId;
+    this.token = token;
+    this.ws = null;
+    this.messageHandlers = new Set();
+  }
+
+  connect() {
+    this.ws = new WebSocket(`ws://your-api-url/ws/chat/${this.userId}?token=${this.token}`);
+    
+    this.ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      this.messageHandlers.forEach(handler => handler(data));
+    };
+
+    this.ws.onclose = () => {
+      // Implement reconnection logic
+      setTimeout(() => this.connect(), 5000);
+    };
+  }
+
+  sendMessage(receiverId, jobId, message, type = "text") {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        sender_id: this.userId,
+        receiver_id: receiverId,
+        job_id: jobId,
+        type: type,
+        message: message
+      }));
+    }
+  }
+
+  addMessageHandler(handler) {
+    this.messageHandlers.add(handler);
+  }
+
+  removeMessageHandler(handler) {
+    this.messageHandlers.delete(handler);
+  }
+
+  disconnect() {
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+}
+
+// Usage in a React Native component:
+const ChatScreen = () => {
+  const [messages, setMessages] = useState([]);
+  const chatService = useRef(null);
+
+  useEffect(() => {
+    const initChat = async () => {
+      const userId = await AsyncStorage.getItem('userId');
+      const token = await AsyncStorage.getItem('sessionKey');
+      
+      chatService.current = new ChatService(userId, token);
+      chatService.current.addMessageHandler((data) => {
+        setMessages(prev => [...prev, data]);
+      });
+      chatService.current.connect();
+    };
+
+    initChat();
+
+    return () => {
+      chatService.current?.disconnect();
+    };
+  }, []);
+
+  const sendMessage = (receiverId, jobId, message, type = "text") => {
+    chatService.current?.sendMessage(receiverId, jobId, message, type);
+  };
+
+  return (
+    // Your chat UI components
+  );
+};
+```
+
+### Web Implementation
+```javascript
+class WebChatService {
+  constructor(userId, token) {
+    this.userId = userId;
+    this.token = token;
+    this.ws = null;
+    this.messageHandlers = [];
+  }
+
+  connect() {
+    this.ws = new WebSocket(`ws://your-api-url/ws/chat/${this.userId}?token=${this.token}`);
+    
+    this.ws.onopen = () => {
+      console.log('Connected to chat');
+    };
+
+    this.ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      this.messageHandlers.forEach(handler => handler(data));
+    };
+
+    this.ws.onclose = () => {
+      console.log('Disconnected from chat');
+      // Implement reconnection logic
+      setTimeout(() => this.connect(), 5000);
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+  }
+
+  sendMessage(receiverId, jobId, message, type = "text") {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        sender_id: this.userId,
+        receiver_id: receiverId,
+        job_id: jobId,
+        type: type,
+        message: message
+      }));
+    }
+  }
+
+  addMessageHandler(handler) {
+    this.messageHandlers.push(handler);
+  }
+
+  removeMessageHandler(handler) {
+    const index = this.messageHandlers.indexOf(handler);
+    if (index > -1) {
+      this.messageHandlers.splice(index, 1);
+    }
+  }
+
+  disconnect() {
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+}
+
+// Usage in a web component:
+const initializeChat = () => {
+  const userId = localStorage.getItem('userId');
+  const token = localStorage.getItem('sessionKey');
+  
+  const chatService = new WebChatService(userId, token);
+  chatService.addMessageHandler((data) => {
+    // Handle received message
+    displayMessage(data);
+  });
+  chatService.connect();
+  
+  return chatService;
+};
+```
+
+### Chat Features
+- **Real-time messaging** between employers and employees
+- **Offline message storage** and delivery when users come back online
+- **Message read status** tracking
+- **Multiple message types** support (text, zoom links, form links, status updates)
+- **Automatic reconnection** handling for dropped connections
+- **Message persistence** in Supabase database
+- **Token-based authentication** for secure connections
+- **Proper connection cleanup** to prevent memory leaks
+
+### Error Codes
+- `4001`: Missing authentication token
+- `4002`: Invalid or expired token
+- `4003`: User ID mismatch with token
+- `4500`: Internal authentication error
+
+### Connection Best Practices
+1. **Always authenticate** with a valid token before connecting
+2. **Handle connection drops** gracefully with automatic reconnection
+3. **Clean up connections** when components unmount
+4. **Validate message format** before sending
+5. **Implement message queuing** for offline scenarios
+6. **Use proper error handling** for all WebSocket events
+
+---
+
+### Chat History API
+
+#### Get Chat History
+- **Endpoint**: `GET /messages/{sender_id}/{receiver_id}`
+- **Description**: Retrieve chat message history between two users. This endpoint fetches messages in one direction only (from sender to receiver). To get complete conversation history, you need to make two API calls with swapped sender/receiver IDs.
+- **Parameters**:
+  - `sender_id` (path parameter, required) - The ID of the message sender
+  - `receiver_id` (path parameter, required) - The ID of the message receiver (note: there's a typo in the actual endpoint parameter name: `reciever_id`)
+- **Request**: No body required
+
+- **Sample Request (curl)**:
+```bash
+curl -X GET "http://your-api-url/messages/a14887b6-6292-4fd9-85c7-8cd821c19d22/f5cf5a60-f6d7-4754-b7cc-31ed083b0dd3"
+```
+
+- **Sample Response (Success)**:
+```json
+{
+  "Status": "Success",
+  "Message": "Chat history fetched successfully",
+  "data": [
+    {
+      "id": 2,
+      "job_id": 24,
+      "sender_id": "a14887b6-6292-4fd9-85c7-8cd821c19d22",
+      "receiver_id": "f5cf5a60-f6d7-4754-b7cc-31ed083b0dd3",
+      "message": "test",
+      "type": "text",
+      "created_at": "2025-07-14T05:18:39.50607+00:00",
+      "is_read": false
+    },
+    {
+      "id": 3,
+      "job_id": 24,
+      "sender_id": "a14887b6-6292-4fd9-85c7-8cd821c19d22",
+      "receiver_id": "f5cf5a60-f6d7-4754-b7cc-31ed083b0dd3",
+      "message": "LALALA",
+      "type": "text",
+      "created_at": "2025-07-14T05:20:37.308868+00:00",
+      "is_read": false
+    }
+  ]
+}
+```
+
+- **Sample Response (No History)**:
+```json
+{
+  "Status": "Error",
+  "Message": "No chat history found"
+}
+```
+
+- **Error Response**:
+```json
+{
+  "Status": "Error",
+  "Message": "Failed to fetch chat history",
+  "Details": "Error details here"
+}
+```
+
+#### Implementation Examples
+
+**JavaScript/Web Implementation**:
+```javascript
+const getChatHistory = async (senderId, receiverId) => {
+  try {
+    const response = await fetch(`http://your-api-url/messages/${senderId}/${receiverId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+        // Note: Add Authorization header when authentication is implemented
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.Status === 'Success') {
+      return data.data; // Returns the messages array
+    } else {
+      throw new Error(data.Message);
+    }
+  } catch (error) {
+    console.error('Chat history fetch error:', error);
+    throw error;
+  }
+};
+
+// To get complete conversation history (both directions):
+const getCompleteConversation = async (userId1, userId2) => {
+  try {
+    const [messages1, messages2] = await Promise.all([
+      getChatHistory(userId1, userId2),
+      getChatHistory(userId2, userId1)
+    ]);
+    
+    // Combine and sort messages by creation date
+    const allMessages = [...(messages1 || []), ...(messages2 || [])];
+    return allMessages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  } catch (error) {
+    console.error('Complete conversation fetch error:', error);
+    return [];
+  }
+};
+```
+
+**React Native Implementation**:
+```javascript
+const getChatHistory = async (senderId, receiverId) => {
+  try {
+    const response = await fetch(`http://your-api-url/messages/${senderId}/${receiverId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+        // Note: Add Authorization header when authentication is implemented
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.Status === 'Success') {
+      return data.data;
+    } else {
+      throw new Error(data.Message);
+    }
+  } catch (error) {
+    console.error('Chat history fetch error:', error);
+    throw error;
+  }
+};
+
+// Usage in a React Native component:
+const ChatScreen = ({ route }) => {
+  const { receiverId } = route.params;
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      try {
+        const userId = await AsyncStorage.getItem('userId');
+        const history = await getCompleteConversation(userId, receiverId);
+        setMessages(history);
+      } catch (error) {
+        console.error('Failed to load chat history:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadChatHistory();
+  }, [receiverId]);
+
+  // Rest of your component logic
+};
+```
+
+#### Important Notes
+
+1. **Directional Messages**: This endpoint only returns messages sent from `sender_id` to `receiver_id`. For a complete conversation, you need two API calls with swapped user IDs.
+
+2. **Missing Authentication**: The current implementation doesn't require authentication. Consider adding authorization to prevent unauthorized access to private conversations.
+
+3. **Parameter Typo**: The actual endpoint has a typo in the parameter name (`reciever_id` instead of `receiver_id`). Use the typo when making API calls.
+
+4. **Message Ordering**: Messages are returned in chronological order (oldest first) based on `created_at` timestamp.
+
+5. **Integration with WebSocket**: Use this endpoint to load chat history when opening a conversation, then use WebSocket for real-time messaging.
+
+#### Recommended Usage Pattern
+
+```javascript
+// 1. Load chat history when opening conversation
+const initializeChat = async (currentUserId, otherUserId) => {
+  // Load historical messages
+  const history = await getCompleteConversation(currentUserId, otherUserId);
+  displayMessages(history);
+  
+  // Connect to WebSocket for real-time messaging
+  const chatService = new WebChatService(currentUserId, token);
+  chatService.connect();
+  
+  return chatService;
+};
+```
+
+---
+
 ## Error Handling
 
 All endpoints follow a consistent error response format:
@@ -1314,7 +1934,7 @@ const uploadWithFiles = async (endpoint, formData) => {
 ```javascript
 class AuthService {
   static async login(email, password) {
-    const response = await fetch(`${API_BASE_URL}/login-employer`, {
+    const response = await fetch(`${API_BASE_URL}/employer/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
@@ -1347,7 +1967,7 @@ class AuthService {
 ```javascript
 class JobService {
   static async createJob(jobData) {
-    const response = await fetch(`${API_BASE_URL}/create-jobs`, {
+    const response = await fetch(`${API_BASE_URL}/jobs/create-jobs`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(jobData)
@@ -1356,7 +1976,7 @@ class JobService {
   }
   
   static async getJobs() {
-    const response = await fetch(`${API_BASE_URL}/view-all-jobs`, {
+    const response = await fetch(`${API_BASE_URL}/jobs/view-all-jobs`, {
       method: 'GET',
       headers: getAuthHeaders()
     });
@@ -1364,7 +1984,7 @@ class JobService {
   }
   
   static async deleteJob(jobId) {
-    const response = await fetch(`${API_BASE_URL}/delete-job/${jobId}`, {
+    const response = await fetch(`${API_BASE_URL}/jobs/delete-job/${jobId}`, {
       method: 'POST',
       headers: getAuthHeaders()
     });
@@ -1402,7 +2022,7 @@ const getAuthHeaders = async () => {
 ```javascript
 class AuthService {
   static async login(email, password) {
-    const response = await fetch(`${API_BASE_URL}/login-employee`, {
+    const response = await fetch(`${API_BASE_URL}/employee/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
