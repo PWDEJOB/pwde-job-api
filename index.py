@@ -1658,22 +1658,22 @@ async def get_chat_history(sender_id: str, reciever_id: str):
             "Details": f"{e}"
         }
 
-@app.post("/message/send/{reciver_id}") # send message to a user
-async def send_message(reciver_id: str, message: str, job_id: str, type: str, sender_id: str, request: Request):
+@app.post("/message/send-message") # send message to a user
+async def send_message(payload: ChatMessage, request: Request):
+    # check if the user is authenticated
     auth_userID = await getAuthUserIdFromRequest(redis, request)
-    if auth_userID != sender_id:
+    if auth_userID != payload.sender_id:
         return {
             "Status": "Error",
             "Message": "Unauthorized: sender_id does not match authenticated user"
         }
-    
     supabase = create_client(url, service_key)
     response = supabase.table("messages").insert({
-        "sender_id": sender_id,
-        "receiver_id": reciver_id,
-        "message": message,
-        "job_id": job_id,
-        "type": type
+        "sender_id": payload.sender_id,
+        "receiver_id": payload.receiver_id,
+        "message": payload.message,
+        "job_id": payload.job_id,
+        "type": payload.type
     }).execute()
     
     if response.data:
