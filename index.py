@@ -1657,3 +1657,33 @@ async def get_chat_history(sender_id: str, reciever_id: str):
             "Message": "Failed to fetch chat history",
             "Details": f"{e}"
         }
+
+@app.post("/message/send/{reciver_id}") # send message to a user
+async def send_message(reciver_id: str, message: str, job_id: str, type: str, sender_id: str, request: Request):
+    auth_userID = await getAuthUserIdFromRequest(redis, request)
+    if auth_userID != sender_id:
+        return {
+            "Status": "Error",
+            "Message": "Unauthorized: sender_id does not match authenticated user"
+        }
+    
+    supabase = create_client(url, service_key)
+    response = supabase.table("messages").insert({
+        "sender_id": sender_id,
+        "receiver_id": reciver_id,
+        "message": message,
+        "job_id": job_id,
+        "type": type
+    }).execute()
+    
+    if response.data:
+        return {
+            "Status": "Success",
+            "Message": "Message sent successfully",
+            "data": response.data[0]
+        }
+    else:
+        return {
+            "Status": "Error",
+            "Message": "Failed to send message"
+        }

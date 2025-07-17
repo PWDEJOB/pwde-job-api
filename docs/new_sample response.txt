@@ -1,32 +1,17 @@
+app.post("/message/send/{reciver_id}")
+Send message endpoint
+
 {
   "Status": "Success",
-  "Message": "Chat history fetched successfully",
-  "data": [
-    {
-      "id": 2,
-      "job_id": 24,
-      "sender_id": "a14887b6-6292-4fd9-85c7-8cd821c19d22",
-      "receiver_id": "f5cf5a60-f6d7-4754-b7cc-31ed083b0dd3",
-      "message": "test",
-      "type": "text",
-      "created_at": "2025-07-14T05:18:39.50607+00:00",
-      "is_read": false
-    },
-    {
-      "id": 3,
-      "job_id": 24,
-      "sender_id": "a14887b6-6292-4fd9-85c7-8cd821c19d22",
-      "receiver_id": "f5cf5a60-f6d7-4754-b7cc-31ed083b0dd3",
-      "message": "LALALA",
-      "type": "text",
-      "created_at": "2025-07-14T05:20:37.308868+00:00",
-      "is_read": false
-    }
-  ]
-}
-
-If no chat hsitory:
-{
-    "Status": "Error",
-    "Message": "No chat history found",
+  "Message": "Message sent successfully",
+  "data": {
+    "id": 6,
+    "job_id": 24,
+    "sender_id": "a14887b6-6292-4fd9-85c7-8cd821c19d22",
+    "receiver_id": "f5cf5a60-f6d7-4754-b7cc-31ed083b0dd3",
+    "message": "Testng Realtime",
+    "type": "text",
+    "created_at": "2025-07-17T13:22:57.923599+00:00",
+    "is_read": false
+  }
 }
