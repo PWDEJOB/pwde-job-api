@@ -1,4 +1,4 @@
-app.post("/message/send/{reciver_id}")
+app.post("/message/send-message")
 Send message endpoint
 
 {

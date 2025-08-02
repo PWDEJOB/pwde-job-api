@@ -7,6 +7,8 @@ from redis_server.redis_client import redis
 from models.model import updateEmployer, updateEmployee, loginCreds, inputSignupEmployer, inputSignupEmployee, jobCreation, updateJob
 import ast
 from datetime import datetime
+import httpx
+import asyncio
 
 app = FastAPI()
 app.add_middleware(
@@ -1658,6 +1660,80 @@ async def get_chat_history(sender_id: str, reciever_id: str):
             "Details": f"{e}"
         }
 
+# ======== Push Notification Functions ========
+
+async def get_user_push_token(user_id: str) -> str:
+    """Get the active push token for a user from the database"""
+    try:
+        supabase = create_client(url, service_key)
+        response = supabase.table("push_tokens").select("expo_token").eq("user_id", user_id).eq("active", True).execute()
+        
+        if response.data and len(response.data) > 0:
+            return response.data[0]["expo_token"]
+        return None
+    except Exception as e:
+        print(f"❌ Error getting push token for user {user_id}: {str(e)}")
+        return None
+
+async def send_push_notification(expo_token: str, title: str, body: str, data: dict = None):
+    """Send push notification via Expo Push API"""
+    try:
+        notification_payload = {
+            "to": expo_token,
+            "title": title,
+            "body": body,
+            "sound": "default",
+            "priority": "high"
+        }
+        
+        if data:
+            notification_payload["data"] = data
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://exp.host/--/api/v2/push/send",
+                json=notification_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                }
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"✅ Push notification sent successfully: {result}")
+                return result
+            else:
+                print(f"❌ Failed to send push notification: {response.status_code} - {response.text}")
+                return None
+                
+    except Exception as e:
+        print(f"❌ Error sending push notification: {str(e)}")
+        return None
+
+def get_notification_content(message_type: str):
+    """Get appropriate notification title and body based on message type"""
+    if message_type == "zoom_link":
+        return {
+            "title": "🎥 Interview Scheduled!",
+            "body": "You have a new interview scheduled. Tap to join the meeting."
+        }
+    elif message_type == "form_link":
+        return {
+            "title": "📝 Test Assigned!",
+            "body": "A new technical test has been assigned to you."
+        }
+    elif message_type == "status_update":
+        return {
+            "title": "📋 Status Update",
+            "body": "There's an update on your application status."
+        }
+    else:  # text or default
+        return {
+            "title": "💬 New Message",
+            "body": "You have received a new message from an employer."
+        }
+
 @app.post("/message/send-message") # send message to a user
 async def send_message(payload: ChatMessage, request: Request):
     # check if the user is authenticated
@@ -1667,7 +1743,10 @@ async def send_message(payload: ChatMessage, request: Request):
             "Status": "Error",
             "Message": "Unauthorized: sender_id does not match authenticated user"
         }
+    
     supabase = create_client(url, service_key)
+    
+    # Insert message into database
     response = supabase.table("messages").insert({
         "sender_id": payload.sender_id,
         "receiver_id": payload.receiver_id,
@@ -1677,13 +1756,90 @@ async def send_message(payload: ChatMessage, request: Request):
     }).execute()
     
     if response.data:
+        inserted_message = response.data[0]
+        
+        # Send push notification to receiver (async, don't wait for it)
+        async def send_notification():
+            try:
+                # Get receiver's push token
+                push_token = await get_user_push_token(payload.receiver_id)
+                
+                if push_token:
+                    # Get appropriate notification content based on message type
+                    notification_content = get_notification_content(payload.type)
+                    
+                    # Send push notification
+                    await send_push_notification(
+                        expo_token=push_token,
+                        title=notification_content["title"],
+                        body=notification_content["body"],
+                        data={
+                            "type": "message",
+                            "messageId": inserted_message["id"],
+                            "senderId": payload.sender_id,
+                            "messageType": payload.type,
+                            "jobId": payload.job_id
+                        }
+                    )
+                    print(f"🔔 Push notification sent to user {payload.receiver_id}")
+                else:
+                    print(f"⚠️ No push token found for user {payload.receiver_id}")
+                    
+            except Exception as e:
+                print(f"❌ Error sending push notification: {str(e)}")
+        
+        # Start notification task in background (don't block the response)
+        asyncio.create_task(send_notification())
+        
         return {
             "Status": "Success",
             "Message": "Message sent successfully",
-            "data": response.data[0]
+            "data": inserted_message
         }
     else:
         return {
             "Status": "Error",
             "Message": "Failed to send message"
+        }
+
+@app.post("/test-push-notification/{user_id}")
+async def test_push_notification(user_id: str):
+    """Test endpoint to send a push notification to a specific user"""
+    try:
+        # Get user's push token
+        push_token = await get_user_push_token(user_id)
+        
+        if not push_token:
+            return {
+                "Status": "Error",
+                "Message": f"No active push token found for user {user_id}"
+            }
+        
+        # Send test notification
+        result = await send_push_notification(
+            expo_token=push_token,
+            title="🧪 Test Notification",
+            body="This is a test push notification from your backend server!",
+            data={
+                "type": "test",
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+        
+        if result:
+            return {
+                "Status": "Success",
+                "Message": "Test push notification sent successfully",
+                "data": result
+            }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "Failed to send test push notification"
+            }
+            
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": f"Error sending test notification: {str(e)}"
         }
