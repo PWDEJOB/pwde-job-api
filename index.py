@@ -1843,3 +1843,149 @@ async def test_push_notification(user_id: str):
             "Status": "Error",
             "Message": f"Error sending test notification: {str(e)}"
         }
+
+# marking messages as read
+@app.patch("/message/mark-as-read/{message_id}")
+async def mark_message_as_read(message_id: str, request: Request):
+    try:
+        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        supabase = create_client(url, service_key)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    # Verify the message exists and belongs to the authenticated user
+    check_message = supabase.table("messages").select("*").eq("id", message_id).eq("receiver_id", auth_userID).execute()
+
+    if not check_message.data:
+        return {
+            "Status": "Error",
+            "Message": "Message not found"
+        }
+    
+    # Update the message to mark it as read
+    response = supabase.table("messages").update({"is_read": True}).eq("id", message_id).execute()
+
+    if response.data:
+        return {
+            "Status": "Success",
+            "Message": "Message marked as read"
+        }
+    else:
+        return {
+            "Status": "Error",
+            "Message": "Failed to mark message as read"
+        }
+
+#marking all mesages who is not read READ!
+@app.patch("/message/mark-all-as-read/{user_id}")
+async def mark_all_messages_as_read(user_id: str, request: Request):
+    try:
+        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        supabase = create_client(url, service_key)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    # Verify the user exists
+    check_user = supabase.table("users").select("*").eq("id", user_id).execute()
+    
+    if not check_user.data:
+        return {
+            "Status": "Error",
+            "Message": "User not found"
+        }
+    
+    # Update all messages for the user to mark them as read
+    response = supabase.table("messages").update({"is_read": True}).eq("receiver_id", user_id).execute()
+    
+    if response.data:
+        return {
+            "Status": "Success",
+            "Message": "All messages marked as read"
+        }
+    else:
+        return {
+            "Status": "Error",
+            "Message": "Failed to mark all messages as read"
+        }
+
+#get all unread messages
+@app.get("/message/get-unread-messages/{user_id}")
+async def get_unread_messages(user_id: str, request: Request):
+    try:
+        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        supabase = create_client(url, service_key)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    # Verify the user exists
+    check_user = supabase.table("users").select("*").eq("id", user_id).execute()
+    
+    if not check_user.data:
+        return {
+            "Status": "Error",
+            "Message": "User not found"
+        }
+    
+    # Get all unread messages for the user
+    response = supabase.table("messages").select("*").eq("receiver_id", user_id).eq("is_read", False).execute()
+    
+    if response.data:
+        return {
+            "Status": "Success",
+            "Message": "Unread messages fetched successfully",
+            "data": response.data
+        }
+    else:
+        return {
+            "Status": "Error",
+            "Message": "No unread messages found"
+        }
+
+#get all messages
+@app.get("/message/get-all-messages/{user_id}")
+async def get_all_messages(user_id: str, request: Request):
+    try:
+        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        supabase = create_client(url, service_key)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    # Verify the user exists
+    check_user = supabase.table("users").select("*").eq("id", user_id).execute()
+    
+    if not check_user.data:
+        return {
+            "Status": "Error",
+            "Message": "User not found"
+        }
+    
+    # Get all messages for the user
+    response = supabase.table("messages").select("*").eq("receiver_id", user_id).execute()
+    
+    if response.data:
+        return {
+            "Status": "Success",
+            "Message": "All messages fetched successfully",
+            "data": response.data
+        }
+    else:
+        return {
+            "Status": "Error",
+            "Message": "No messages found"
+        }
