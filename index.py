@@ -27,7 +27,7 @@ load_dotenv()
 
 url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_PRIVATE_KEY")
-service_key = os.getenv("SUPBASE_SERVICE_KEY")
+service_key = os.getenv("SUPABASE_SERVICE_KEY")
 
 
 @app.get("/")
@@ -157,7 +157,7 @@ async def signUp(
     if response:
         try:
             # Second step: Insert initial user data
-            supabase_insert: Client = create_client(url, service_key)
+            supabase_insert: Client = create_client(url, key)
             user_data = {
                 "user_id": response.user.id,
                 "full_name": full_name,
@@ -177,9 +177,6 @@ async def signUp(
             if skills:
                 user_data["skills"] = skills
 
-            # Allowed image types (used for profile and PWD IDs)
-            allowed_image_types = ['.jpg', '.jpeg', '.png', '.gif']
-
             # Handle file uploads if provided
             if resume:
                 # Validate file type (PDF only)
@@ -197,21 +194,15 @@ async def signUp(
                         "Message": "Resume file size must be less than 5MB"
                     }
                 
-                # Upload resume with correct content-type metadata
+                # Upload resume
                 resume_path = f"resumes/{response.user.id}/{resume.filename}"
-                supabase.storage.from_("resumes").upload(
-                    resume_path,
-                    resume_content,
-                    {
-                        "content-type": "application/pdf",
-                        "upsert": "true",
-                    },
-                )
+                supabase.storage.from_("resumes").upload(resume_path, resume_content)
                 resume_url = supabase.storage.from_("resumes").get_public_url(resume_path)
                 user_data["resume_url"] = resume_url
 
             if profile_pic:
                 # Validate file type (images only)
+                allowed_image_types = ['.jpg', '.jpeg', '.png', '.gif']
                 file_ext = os.path.splitext(profile_pic.filename)[1].lower()
                 if file_ext not in allowed_image_types:
                     return {
@@ -712,14 +703,7 @@ async def updateProfile(
                     }
                 else:
                     resume_path = f"resumes/{auth_userID}/{resume.filename}"
-                    supabase.storage.from_("resumes").upload(
-                        resume_path,
-                        resume_content,
-                        {
-                            "content-type": "application/pdf",
-                            "upsert": "true",
-                        },
-                    )
+                    supabase.storage.from_("resumes").upload(resume_path, resume_content)
                     resume_url = supabase.storage.from_("resumes").get_public_url(resume_path)
                     updated_details["resume_url"] = resume_url
 
@@ -1232,16 +1216,9 @@ async def uploadResume(request: Request, file: UploadFile = File(...)):
 
         if check_user.data and check_user.data["user_id"] == auth_userID:
             try:
-                # Upload the resume to the supabase storage with proper metadata
+                # Upload the resume to the supabase storage
                 resume_path = f"resumes/{auth_userID}/{file.filename}"
-                supabase.storage.from_("resumes").upload(
-                    resume_path,
-                    file_content,
-                    {
-                        "content-type": "application/pdf",
-                        "upsert": "true",
-                    },
-                )
+                supabase.storage.from_("resumes").upload(resume_path, file_content)
 
                 # Update the employee's profile with the resume URL
                 resume_url = supabase.storage.from_("resumes").get_public_url(resume_path)
@@ -1329,62 +1306,12 @@ async def viewApplicationHistory(request: Request):
         check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
         
         if check_user.data and check_user.data["user_id"] == auth_userID:
-            view_all_applciations = supabase.table("job_applications").select("*").eq("user_id", auth_userID).order("created_at", desc=True).execute()
+            view_all_applciations = supabase.table("job_applications").select("*").eq("user_id", auth_userID).execute()
             
             if view_all_applciations.data:
-                applications = view_all_applciations.data
-                # Fetch related job details in batch to avoid N/A on client
-                raw_ids = list({app.get("job_id") for app in applications if app.get("job_id") is not None})
-                # Split into numeric and non-numeric forms to support either integer or text IDs
-                numeric_ids: list[int] = []
-                string_ids: list[str] = []
-                for rid in raw_ids:
-                    s = str(rid)
-                    if s.isdigit():
-                        try:
-                            numeric_ids.append(int(s))
-                        except Exception:
-                            string_ids.append(s)
-                    else:
-                        string_ids.append(s)
-
-                job_details_map = {}
-                # Query numeric IDs
-                if numeric_ids:
-                    jobs_resp = supabase.table("jobs").select("*").in_("id", numeric_ids).execute()
-                    for job in jobs_resp.data or []:
-                        job_details_map[str(job["id"])]= job
-                # Query string IDs (in case jobs.id is text/uuid)
-                if string_ids:
-                    jobs_resp2 = supabase.table("jobs").select("*").in_("id", string_ids).execute()
-                    for job in jobs_resp2.data or []:
-                        job_details_map[str(job["id"])]= job
-
-                # Attach job details to each application, with direct-fetch fallback
-                enriched = []
-                for app in applications:
-                    app_copy = dict(app)
-                    raw_job_id = app_copy.get("job_id")
-                    job_id_key = str(raw_job_id) if raw_job_id is not None else None
-                    if job_id_key and job_id_key in job_details_map:
-                        app_copy["jobDetails"] = job_details_map[job_id_key]
-                    elif raw_job_id is not None:
-                        # Fallback: query this job_id directly
-                        try:
-                            # Try numeric match first
-                            jid_numeric = int(str(raw_job_id))
-                            single_job = supabase.table("jobs").select("*").eq("id", jid_numeric).single().execute()
-                        except Exception:
-                            # Non-numeric id form (text/uuid)
-                            single_job = supabase.table("jobs").select("*").eq("id", str(raw_job_id)).single().execute()
-
-                        if getattr(single_job, 'data', None):
-                            app_copy["jobDetails"] = single_job.data
-                    enriched.append(app_copy)
-
                 return{
                     "Status": "Successfull",
-                    "Message": enriched
+                    "Message": view_all_applciations.data
                 }
             else:
                 return{
