@@ -1306,12 +1306,67 @@ async def viewApplicationHistory(request: Request):
         check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
         
         if check_user.data and check_user.data["user_id"] == auth_userID:
-            view_all_applciations = supabase.table("job_applications").select("*").eq("user_id", auth_userID).execute()
-            
+            # Get all applications for this user (newest first)
+            view_all_applciations = (
+                supabase
+                .table("job_applications")
+                .select("*")
+                .eq("user_id", auth_userID)
+                .order("created_at", desc=True)
+                .execute()
+            )
+
             if view_all_applciations.data:
+                applications = view_all_applciations.data
+
+                # Collect distinct job_ids
+                raw_ids = list({app.get("job_id") for app in applications if app.get("job_id") is not None})
+
+                # Split numeric vs. string ids to support both integer and uuid/text schemas
+                numeric_ids: list[int] = []
+                string_ids: list[str] = []
+                for rid in raw_ids:
+                    s = str(rid)
+                    if s.isdigit():
+                        try:
+                            numeric_ids.append(int(s))
+                        except Exception:
+                            string_ids.append(s)
+                    else:
+                        string_ids.append(s)
+
+                # Build jobs map by id (as string)
+                job_details_map: dict[str, dict] = {}
+                if numeric_ids:
+                    jobs_resp = supabase.table("jobs").select("*").in_("id", numeric_ids).execute()
+                    for job in jobs_resp.data or []:
+                        job_details_map[str(job["id"])] = job
+                if string_ids:
+                    jobs_resp2 = supabase.table("jobs").select("*").in_("id", string_ids).execute()
+                    for job in jobs_resp2.data or []:
+                        job_details_map[str(job["id"])] = job
+
+                # Attach jobDetails, with direct-fetch fallback
+                enriched = []
+                for app in applications:
+                    app_copy = dict(app)
+                    raw_job_id = app_copy.get("job_id")
+                    job_id_key = str(raw_job_id) if raw_job_id is not None else None
+                    if job_id_key and job_id_key in job_details_map:
+                        app_copy["jobDetails"] = job_details_map[job_id_key]
+                    elif raw_job_id is not None:
+                        try:
+                            jid_numeric = int(str(raw_job_id))
+                            single_job = supabase.table("jobs").select("*").eq("id", jid_numeric).single().execute()
+                        except Exception:
+                            single_job = supabase.table("jobs").select("*").eq("id", str(raw_job_id)).single().execute()
+                        if getattr(single_job, 'data', None):
+                            app_copy["jobDetails"] = single_job.data
+                    enriched.append(app_copy)
+
                 return{
                     "Status": "Successfull",
-                    "Message": view_all_applciations.data
+                    "Message": enriched
                 }
             else:
                 return{
