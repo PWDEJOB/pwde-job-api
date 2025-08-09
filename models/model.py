@@ -83,5 +83,5 @@ class ChatMessage(BaseModel):
     sender_id: str
     receiver_id: str
     job_id: str
-    type: Literal["text","zoom_link","form_link","status_update"]
+    type: Literal["text","google_meet_link","form_link","status_update"]
     message: str
