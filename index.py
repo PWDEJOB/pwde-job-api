@@ -1713,7 +1713,7 @@ async def send_push_notification(expo_token: str, title: str, body: str, data: d
 
 def get_notification_content(message_type: str):
     """Get appropriate notification title and body based on message type"""
-    if message_type == "zoom_link":
+    if message_type == "google_meet_link":
         return {
             "title": "🎥 Interview Scheduled!",
             "body": "You have a new interview scheduled. Tap to join the meeting."
