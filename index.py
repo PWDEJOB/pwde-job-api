@@ -157,7 +157,7 @@ async def signUp(
     if response:
         try:
             # Second step: Insert initial user data
-            supabase_insert: Client = create_client(url, key)
+            supabase_insert: Client = create_client(url, service_key)
             user_data = {
                 "user_id": response.user.id,
                 "full_name": full_name,
@@ -176,6 +176,9 @@ async def signUp(
                 user_data["disability"] = disability
             if skills:
                 user_data["skills"] = skills
+
+            # Allowed image types (used for profile and PWD IDs)
+            allowed_image_types = ['.jpg', '.jpeg', '.png', '.gif']
 
             # Handle file uploads if provided
             if resume:
@@ -209,7 +212,6 @@ async def signUp(
 
             if profile_pic:
                 # Validate file type (images only)
-                allowed_image_types = ['.jpg', '.jpeg', '.png', '.gif']
                 file_ext = os.path.splitext(profile_pic.filename)[1].lower()
                 if file_ext not in allowed_image_types:
                     return {
