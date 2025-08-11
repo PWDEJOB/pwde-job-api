@@ -194,9 +194,16 @@ async def signUp(
                         "Message": "Resume file size must be less than 5MB"
                     }
                 
-                # Upload resume
+                # Upload resume with correct content-type to allow inline PDF viewing
                 resume_path = f"resumes/{response.user.id}/{resume.filename}"
-                supabase.storage.from_("resumes").upload(resume_path, resume_content)
+                supabase.storage.from_("resumes").upload(
+                    resume_path,
+                    resume_content,
+                    {
+                        "content-type": "application/pdf",
+                        "upsert": "true",
+                    },
+                )
                 resume_url = supabase.storage.from_("resumes").get_public_url(resume_path)
                 user_data["resume_url"] = resume_url
 
@@ -703,7 +710,14 @@ async def updateProfile(
                     }
                 else:
                     resume_path = f"resumes/{auth_userID}/{resume.filename}"
-                    supabase.storage.from_("resumes").upload(resume_path, resume_content)
+                    supabase.storage.from_("resumes").upload(
+                        resume_path,
+                        resume_content,
+                        {
+                            "content-type": "application/pdf",
+                            "upsert": "true",
+                        },
+                    )
                     resume_url = supabase.storage.from_("resumes").get_public_url(resume_path)
                     updated_details["resume_url"] = resume_url
 
@@ -1216,9 +1230,16 @@ async def uploadResume(request: Request, file: UploadFile = File(...)):
 
         if check_user.data and check_user.data["user_id"] == auth_userID:
             try:
-                # Upload the resume to the supabase storage
+                # Upload the resume to the supabase storage with proper metadata
                 resume_path = f"resumes/{auth_userID}/{file.filename}"
-                supabase.storage.from_("resumes").upload(resume_path, file_content)
+                supabase.storage.from_("resumes").upload(
+                    resume_path,
+                    file_content,
+                    {
+                        "content-type": "application/pdf",
+                        "upsert": "true",
+                    },
+                )
 
                 # Update the employee's profile with the resume URL
                 resume_url = supabase.storage.from_("resumes").get_public_url(resume_path)
