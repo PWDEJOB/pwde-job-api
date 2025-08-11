@@ -196,7 +196,7 @@ async def signUp(
                 
                 # Upload resume with correct content-type to allow inline PDF viewing
                 resume_path = f"resumes/{response.user.id}/{resume.filename}"
-                supabase.storage.from_("resumes").upload(
+                supabase_insert.storage.from_("resumes").upload(
                     resume_path,
                     resume_content,
                     {
@@ -227,7 +227,7 @@ async def signUp(
                 
                 # Upload profile picture
                 profile_pic_path = f"profilepic/{response.user.id}/{profile_pic.filename}"
-                supabase.storage.from_("profilepic").upload(profile_pic_path, profile_pic_content)
+                supabase_insert.storage.from_("profilepic").upload(profile_pic_path, profile_pic_content)
                 profile_pic_url = supabase.storage.from_("profilepic").get_public_url(profile_pic_path)
                 user_data["profile_pic_url"] = profile_pic_url
 
@@ -250,7 +250,7 @@ async def signUp(
                 
                 # Upload PWD ID front
                 pwd_id_front_path = f"pwdidfront/{response.user.id}/{pwd_id_front.filename}"
-                supabase.storage.from_("pwdidfront").upload(pwd_id_front_path, pwd_id_front_content)
+                supabase_insert.storage.from_("pwdidfront").upload(pwd_id_front_path, pwd_id_front_content)
                 pwd_id_front_url = supabase.storage.from_("pwdidfront").get_public_url(pwd_id_front_path)
                 user_data["pwd_id_front_url"] = pwd_id_front_url
 
@@ -273,7 +273,7 @@ async def signUp(
                 
                 # Upload PWD ID back
                 pwd_id_back_path = f"pwdidback/{response.user.id}/{pwd_id_back.filename}"
-                supabase.storage.from_("pwdidback").upload(pwd_id_back_path, pwd_id_back_content)
+                supabase_insert.storage.from_("pwdidback").upload(pwd_id_back_path, pwd_id_back_content)
                 pwd_id_back_url = supabase.storage.from_("pwdidback").get_public_url(pwd_id_back_path)
                 user_data["pwd_id_back_url"] = pwd_id_back_url
 
