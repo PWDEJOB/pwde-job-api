@@ -157,7 +157,7 @@ async def signUp(
     if response:
         try:
             # Second step: Insert initial user data
-            supabase_insert: Client = create_client(url, key)
+            supabase_insert: Client = create_client(url, service_key)
             user_data = {
                 "user_id": response.user.id,
                 "full_name": full_name,
