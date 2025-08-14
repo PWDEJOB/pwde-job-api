@@ -1713,10 +1713,16 @@ async def websocket_endpoint(
 
 #get the chat history
 @app.get("/messages/{sender_id}/{receiver_id}")
-async def get_chat_history(sender_id: str, reciever_id: str):
+async def get_chat_history(sender_id: str, reciever_id: str, job_id: str = None):
     try:
         supabase = create_client(url, service_key)
-        response = supabase.table("messages").select("*").eq("sender_id", sender_id).eq("receiver_id", reciever_id).order("created_at").execute()
+        query = supabase.table("messages").select("*").eq("sender_id", sender_id).eq("receiver_id", reciever_id)
+        
+        # Filter by job_id if provided
+        if job_id:
+            query = query.eq("job_id", job_id)
+            
+        response = query.order("created_at").execute()
 
         if response.data:
             return {
