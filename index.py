@@ -1156,7 +1156,7 @@ async def applyingForJob(job_id: str, request: Request):
                     }
                 try:
                     receiver_id = supabase.table("jobs").select("user_id").eq("id", job_id).single().execute()
-                    sendNotification(user_id, receiver_id.data["user_id"], content, category)
+                    await sendNotification(user_id, receiver_id.data["user_id"], content, category)
                 except Exception as e:
                     return {
                         "Status": "Error",
@@ -1370,7 +1370,7 @@ async def updateApplicationStatus(request : Request, application_id: str, new_st
                 category = "job_application_sent"
                 content = f"Your application at {job_title} is sent"
             try:
-                sendNotification(user_id, receiver_id.data["user_id"], content, category)
+                await sendNotification(user_id, receiver_id.data["user_id"], content, category)
             except Exception as e:
                 return {
                     "Status": "Error",
@@ -1945,7 +1945,7 @@ async def send_message(payload: ChatMessage, request: Request):
 
     try:
         content = f"You have a new message from {sender_name}"
-        sendNotification(user_id, payload.receiver_id, content, category)
+        await sendNotification(user_id, payload.receiver_id, content, category)
     except Exception as e:
         return {
             "Status": "Error",
