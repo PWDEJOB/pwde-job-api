@@ -122,6 +122,16 @@ async def getAuthUserIdFromRequest(redis, request: Request):
 #Send basic notification
 async def sendNotification(user_id: str, receiver_id: str, content: str, category: str):
     supabase = create_client(url, service_key)
+    
+    # Validate inputs
+    if not user_id or not receiver_id or not content or not category:
+        raise Exception(f"Missing required notification data: user_id={user_id}, receiver_id={receiver_id}, content={content}, category={category}")
+    
+    # Ensure all inputs are strings
+    user_id = str(user_id)
+    receiver_id = str(receiver_id)
+    content = str(content)
+    category = str(category)
 
     #employer notifs categories
     if category == "new_applicant":
@@ -142,20 +152,33 @@ async def sendNotification(user_id: str, receiver_id: str, content: str, categor
         title = "Notification"  # Default title
         
     try:
-        result = supabase.table("notifications").insert({
+        notification_data = {
             "title": title,
             "user_id": user_id,
             "receiver_id": receiver_id,
             "content": content,
             "category": category
-        }).execute()
+        }
+        #
+        print(f"DEBUG - sendNotification data:")
+        print(f"  title: {title}")
+        print(f"  user_id: {user_id}")
+        print(f"  receiver_id: {receiver_id}")
+        print(f"  content: {content}")
+        print(f"  category: {category}")
+        #
+        
+        result = supabase.table("notifications").insert(notification_data).execute()
+        
+        print(f"DEBUG - insert result: {result}")
         
         if not result.data:
             raise Exception("Failed to insert notification - no data returned")
             
     except Exception as e:
-        print(f"Error in sendNotification: {e}")
-        raise e
+        print(f"Error in sendNotification: {e}")#
+        print(f"Error type: {type(e)}")#
+        raise e 
 
 #Authentication Process
 
@@ -1380,8 +1403,16 @@ async def updateApplicationStatus(request : Request, application_id: str, new_st
                 category = "job_application_sent"
                 content = f"Your application at {job_title.data['title']} is sent"
             try:
+                #
+                print(f"DEBUG - About to send notification:")
+                print(f"  user_id: {user_id}")
+                print(f"  receiver_id: {receiver_id.data['user_id'] if receiver_id.data else 'None'}")
+                print(f"  content: {content}")
+                print(f"  category: {category}")
+                #
                 await sendNotification(user_id, receiver_id.data["user_id"], content, category)
             except Exception as e:
+                print(f"DEBUG - sendNotification error: {e}") #
                 return {
                     "Status": "Error",
                     "Message": "Error sending notification",
