@@ -138,14 +138,24 @@ async def sendNotification(user_id: str, receiver_id: str, content: str, categor
         title = "Your job application has been rejected"
     elif category == "job_application_sent":
         title = "Your job application is sent"
+    else:
+        title = "Notification"  # Default title
         
-    supabase.table("notifications").insert({
-        "title": title,
-        "user_id": user_id,
-        "receiver_id": receiver_id,
-        "content": content,
-        "category": category
-    }).execute()
+    try:
+        result = supabase.table("notifications").insert({
+            "title": title,
+            "user_id": user_id,
+            "receiver_id": receiver_id,
+            "content": content,
+            "category": category
+        }).execute()
+        
+        if not result.data:
+            raise Exception("Failed to insert notification - no data returned")
+            
+    except Exception as e:
+        print(f"Error in sendNotification: {e}")
+        raise e
 
 #Authentication Process
 
@@ -1359,16 +1369,16 @@ async def updateApplicationStatus(request : Request, application_id: str, new_st
             
             if new_status == "accepted":
                 category = "job_application_accepted"
-                content = f"Your application at {job_title} has been accepted"
+                content = f"Your application at {job_title.data['title']} has been accepted"
             elif new_status == "rejected":
                 category = "job_application_rejected"
-                content = f"Your application at {job_title} has been rejected"
+                content = f"Your application at {job_title.data['title']} has been rejected"
             elif new_status == "under_review":
                 category = "job_application_sent"
-                content = f"Your application at {job_title} is under review"
+                content = f"Your application at {job_title.data['title']} is under review"
             else:
                 category = "job_application_sent"
-                content = f"Your application at {job_title} is sent"
+                content = f"Your application at {job_title.data['title']} is sent"
             try:
                 await sendNotification(user_id, receiver_id.data["user_id"], content, category)
             except Exception as e:
