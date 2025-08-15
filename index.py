@@ -1976,7 +1976,7 @@ async def send_message(payload: ChatMessage, request: Request):
         sender_name_in_employee = supabase.table("employee").select("full_name").eq("user_id", payload.sender_id).single().execute()
     except Exception as e:
         # If no rows found or other error, continue to check employer table
-        print(f"DEBUG - Employee table check failed: {e}")
+        # print(f"DEBUG - Employee table check failed: {e}")
         sender_name_in_employee = None
     
     # If not found in employee table, try employer table
@@ -1985,7 +1985,7 @@ async def send_message(payload: ChatMessage, request: Request):
             sender_name_in_employer = supabase.table("employers").select("company_name").eq("user_id", payload.sender_id).single().execute()
         except Exception as e:
             # If no rows found or other error in employer table too
-            print(f"DEBUG - Employer table check failed: {e}")
+            # print(f"DEBUG - Employer table check failed: {e}")
             sender_name_in_employer = None
     
     # Determine sender name based on results
