@@ -1970,19 +1970,18 @@ async def send_message(payload: ChatMessage, request: Request):
     try:
         sender_name_in_employee = supabase.table("employee").select("full_name").eq("user_id", payload.sender_id).single().execute()
         sender_name_in_employer = supabase.table("employers").select("company_name").eq("user_id", payload.sender_id).single().execute()
-
-        if sender_name_in_employee.data:
-            sender_name = sender_name_in_employee.data["full_name"]
-        elif sender_name_in_employer.data:
-            sender_name = sender_name_in_employer.data["admin_name"]
-        else:
-            sender_name = "Unknown"
     except Exception as e:
         return{
             "Status": "Error",
             "Message": "Error getting sender name",
             "Details": f"{e}"
         }
+    if sender_name_in_employee.data:
+        sender_name = sender_name_in_employee.data["full_name"]
+    elif sender_name_in_employer.data:
+        sender_name = sender_name_in_employer.data["company_name"]
+    else:
+        sender_name = "Unknown"
 
     try:
         content = f"You have a new message from {sender_name}"
