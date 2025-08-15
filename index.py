@@ -2246,3 +2246,172 @@ async def get_all_messages(user_id: str, request: Request):
             "Status": "Error",
             "Message": "No messages found"
         }
+
+#===Notfication endpoints===
+
+#get all notifications
+@app.get("/notification/get-all-notifications/{user_id}")
+async def get_all_notifications(user_id: str, request: Request):
+    try:
+        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        supabase = create_client(url, service_key)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    try:
+        # Get all notifications for the user
+        response = supabase.table("notifications").select("*").eq("receiver_id", user_id).execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    if response.data:
+        return {
+            "Status": "Success",
+            "Message": "All notifications fetched successfully",
+            "data": response.data
+        }
+    else:
+        return {
+            "Status": "Error",
+            "Message": "No notifications found"
+        }
+
+#mark the notification as read
+@app.patch("/notification/mark-as-read/{notification_id}")
+async def mark_notification_as_read(notification_id: str, request: Request):
+    try:
+        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        supabase = create_client(url, service_key)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    try:
+        # Mark the notification as read
+        response = supabase.table("notifications").update({"is_read": True}).eq("id", notification_id).execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Marking notification as read failed",
+            "Details": f"{e}"
+        }
+    
+    if response.data:
+        return {
+            "Status": "Success",
+            "Message": "Notification marked as read"
+        }
+    else:
+        return {
+            "Message": "Notification not found"
+        }
+
+#mark all notifications as read
+@app.patch("/notification/mark-all-as-read/{user_id}")
+async def mark_all_notifications_as_read(user_id: str, request: Request):
+    try:
+        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        supabase = create_client(url, service_key)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    try:
+        # Mark all notifications as read
+        response = supabase.table("notifications").update({"is_read": True}).eq("receiver_id", user_id).execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Marking all notifications as read failed",
+            "Details": f"{e}"
+        }
+    
+    if response.data:
+        return {
+            "Status": "Success",
+            "Message": "All notifications marked as read"
+        }
+    else:
+        return {
+            "Status": "Error",
+            "Message": "No notifications found"
+        }
+
+#get unread notifications
+@app.get("/notification/get-unread-notifications/{user_id}")
+async def get_unread_notifications(user_id: str, request: Request):
+    try:
+        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        supabase = create_client(url, service_key)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    try:
+        # Get unread notifications
+        response = supabase.table("notifications").select("*").eq("receiver_id", user_id).eq("is_read", False).execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    if response.data:
+        return {
+            "Status": "Success",
+            "Message": "All notifications marked as read"
+        }
+    else:
+        return {
+            "Message": "No notifications found"
+        }
+
+@app.post("/notification/delete-notification/{notification_id}")
+async def delete_notification(notification_id: str, request: Request):
+    try:
+        supabase = create_client(url, service_key)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    try:
+        # Delete the notification
+        response = supabase.table("notifications").delete().eq("id", notification_id).execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Deleting notification failed",
+            "Details": f"{e}"
+        }
+    
+    if response.data:
+        return {
+            "Status": "Success",
+            "Message": "Notification deleted successfully"
+        }
+    else:
+        return {
+            "Status": "Error",
+            "Message": "Notification not found"
+        }
