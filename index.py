@@ -2377,11 +2377,14 @@ async def get_unread_notifications(user_id: str, request: Request):
     if response.data:
         return {
             "Status": "Success",
-            "Message": "All notifications marked as read"
+            "Message": "Unread notifications fetched successfully",
+            "data": response.data
         }
     else:
         return {
-            "Message": "No notifications found"
+            "Status": "Success",
+            "Message": "No unread notifications found",
+            "data": []
         }
 
 @app.post("/notification/delete-notification/{notification_id}")
