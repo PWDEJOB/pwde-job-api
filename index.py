@@ -160,13 +160,13 @@ async def sendNotification(user_id: str, receiver_id: str, content: str, categor
             "category": category
         }
         #
-        print(f"DEBUG - sendNotification data:")
-        print(f"  title: {title}")
-        print(f"  user_id: {user_id}")
-        print(f"  receiver_id: {receiver_id}")
-        print(f"  content: {content}")
-        print(f"  category: {category}")
-        #
+        # print(f"DEBUG - sendNotification data:")
+        # print(f"  title: {title}")
+        # print(f"  user_id: {user_id}")
+        # print(f"  receiver_id: {receiver_id}")
+        # print(f"  content: {content}")
+        # print(f"  category: {category}")
+        # #
         
         result = supabase.table("notifications").insert(notification_data).execute()
         
@@ -1403,16 +1403,16 @@ async def updateApplicationStatus(request : Request, application_id: str, new_st
                 category = "job_application_sent"
                 content = f"Your application at {job_title.data['title']} is sent"
             try:
-                #
-                print(f"DEBUG - About to send notification:")
-                print(f"  user_id: {user_id}")
-                print(f"  receiver_id: {receiver_id.data['user_id'] if receiver_id.data else 'None'}")
-                print(f"  content: {content}")
-                print(f"  category: {category}")
-                #
+                # #
+                # print(f"DEBUG - About to send notification:")
+                # print(f"  user_id: {user_id}")
+                # print(f"  receiver_id: {receiver_id.data['user_id'] if receiver_id.data else 'None'}")
+                # print(f"  content: {content}")
+                # print(f"  category: {category}")
+                # #
                 await sendNotification(user_id, receiver_id.data["user_id"], content, category)
             except Exception as e:
-                print(f"DEBUG - sendNotification error: {e}") #
+                # print(f"DEBUG - sendNotification error: {e}") #
                 return {
                     "Status": "Error",
                     "Message": "Error sending notification",
@@ -1968,8 +1968,8 @@ async def send_message(payload: ChatMessage, request: Request):
     user_id = auth_userID
     category = "message"
     try:
-        sender_name_in_employee = supabase.table("employee").select("full_name").eq("id", payload.sender_id).single().execute()
-        sender_name_in_employer = supabase.table("employers").select("company_name").eq("id", payload.sender_id).single().execute()
+        sender_name_in_employee = supabase.table("employee").select("full_name").eq("user_id", payload.sender_id).single().execute()
+        sender_name_in_employer = supabase.table("employers").select("company_name").eq("user_id", payload.sender_id).single().execute()
 
         if sender_name_in_employee.data:
             sender_name = sender_name_in_employee.data["full_name"]
