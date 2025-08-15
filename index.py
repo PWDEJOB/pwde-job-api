@@ -1967,21 +1967,39 @@ async def send_message(payload: ChatMessage, request: Request):
     #store notification
     user_id = auth_userID
     category = "message"
+    # Initialize variables
+    sender_name_in_employee = None
+    sender_name_in_employer = None
+    
+    # Try to find sender in employee table first
     try:
         sender_name_in_employee = supabase.table("employee").select("full_name").eq("user_id", payload.sender_id).single().execute()
-        sender_name_in_employer = supabase.table("employers").select("company_name").eq("user_id", payload.sender_id).single().execute()
     except Exception as e:
+        # If no rows found or other error, continue to check employer table
+        print(f"DEBUG - Employee table check failed: {e}")
+        sender_name_in_employee = None
+    
+    # If not found in employee table, try employer table
+    if not sender_name_in_employee or not sender_name_in_employee.data:
+        try:
+            sender_name_in_employer = supabase.table("employers").select("company_name").eq("user_id", payload.sender_id).single().execute()
+        except Exception as e:
+            # If no rows found or other error in employer table too
+            print(f"DEBUG - Employer table check failed: {e}")
+            sender_name_in_employer = None
+    
+    # Determine sender name based on results
+    if sender_name_in_employee and sender_name_in_employee.data:
+        sender_name = sender_name_in_employee.data["full_name"]
+    elif sender_name_in_employer and sender_name_in_employer.data:
+        sender_name = sender_name_in_employer.data["company_name"]
+    else:
+        # Only raise error if BOTH tables failed to find the user
         return{
             "Status": "Error",
             "Message": "Error getting sender name",
-            "Details": f"{e}"
+            "Details": f"Sender with user_id {payload.sender_id} not found in either employee or employer tables"
         }
-    if sender_name_in_employee.data:
-        sender_name = sender_name_in_employee.data["full_name"]
-    elif sender_name_in_employer.data:
-        sender_name = sender_name_in_employer.data["company_name"]
-    else:
-        sender_name = "Unknown"
 
     try:
         content = f"You have a new message from {sender_name}"
