@@ -412,7 +412,7 @@ async def signUp(
         }
 
 @app.post("/employee/login") # login employee
-async def login(user: loginCreds):
+async def employee_login(user: loginCreds):
     # validate input
     if not user.email or not user.password:
         return {
@@ -648,7 +648,7 @@ async def signUp(
         }
          
 @app.post("/employer/login") # login employer
-async def login(user: loginCreds):
+async def employer_login(user: loginCreds):
     # validate input
     if not user.email or not user.password:
         return {
