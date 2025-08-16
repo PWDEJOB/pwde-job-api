@@ -41,11 +41,29 @@ async def preload(request: Request):
         # Get the auth user ID from the request
         auth_userID = await getAuthUserIdFromRequest(redis, request)
         supabase = create_client(url, service_key)
-        
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "isAuthenticated": False,
+            "Message": "Internal Server Error",
+            "Details": str(e)
+        }
+    
+
+    try:
         # Check both employee and employer tables
         employee_check = supabase.table("employee").select("*").eq("user_id", auth_userID).execute()
         employer_check = supabase.table("employers").select("*").eq("user_id", auth_userID).execute()
-        
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "isAuthenticated": False,
+            "Message": "User not found",
+            "Details": str(e)
+        }
+    
+
+    try:
         if employee_check.data:
             return {
                 "Status": "Success",
@@ -76,7 +94,7 @@ async def preload(request: Request):
         return {
             "Status": "Error",
             "isAuthenticated": False,
-            "Message": f"Internal Server Error: {employee_check.data}",
+            "Message": f"Internal Server Error",
             "Details": str(e)
         }
 
@@ -211,42 +229,47 @@ async def signUp(
     except Exception as e:
         return{
             "Status":"ERROR",
-            "Message":"Signing Up Failed",
-            "Details": f"{e}"
+            "Message":f"Signing Up Failed: {e}",
         }
     
-    if response:
-        try:
-            # Second step: Insert initial user data
-            supabase_insert: Client = create_client(url, service_key)
-            user_data = {
-                "user_id": response.user.id,
-                "full_name": full_name,
-                "email": email,
-                "role": role
-            }
-            
-            # If additional info is provided, add it to user_data
-            if address:
-                user_data["address"] = address
-            if phone_number:
-                user_data["phone_number"] = phone_number
-            if short_bio:
-                user_data["short_bio"] = short_bio
-            if disability:
-                user_data["disability"] = disability
-            if skills:
-                user_data["skills"] = skills
+        # Validate response and user creation
+    if not response or not response.user or not response.user.id:
+        return {
+            "Status": "Error",
+            "Message": "User creation failed - no user ID returned"
+        }
+    try:
+        # Second step: Insert initial user data
+        supabase_insert: Client = create_client(url, service_key)
+        user_data = {
+            "user_id": response.user.id,
+            "full_name": full_name,
+            "email": email,
+            "role": role
+        }
+        
+        # If additional info is provided, add it to user_data
+        if address:
+            user_data["address"] = address
+        if phone_number:
+            user_data["phone_number"] = phone_number
+        if short_bio:
+            user_data["short_bio"] = short_bio
+        if disability:
+            user_data["disability"] = disability
+        if skills:
+            user_data["skills"] = skills
+        
 
-            # Handle file uploads if provided
-            if resume:
-                # Validate file type (PDF only)
-                if not resume.filename.lower().endswith('.pdf'):
-                    return {
-                        "Status": "Error",
-                        "Message": "Resume must be a PDF file"
-                    }
-                
+        # Handle file uploads if provided
+        if resume:
+            # Validate file type (PDF only)
+            if not resume.filename.lower().endswith('.pdf'):
+                return {
+                    "Status": "Error",
+                    "Message": "Resume must be a PDF file"
+                }
+            try:
                 # Validate file size (5MB limit)
                 resume_content = await resume.read()
                 if len(resume_content) > 5 * 1024 * 1024:
@@ -267,146 +290,218 @@ async def signUp(
                 )
                 resume_url = supabase.storage.from_("resumes").get_public_url(resume_path)
                 user_data["resume_url"] = resume_url
+            except Exception as e:
+                return {
+                    "Status": "Error",
+                    "Message": "Resume upload failed. Please try again.",
+                    "Details": f"{e}"
+                }
 
-            if profile_pic:
-                # Validate file type (images only)
-                allowed_image_types = ['.jpg', '.jpeg', '.png', '.gif']
-                file_ext = os.path.splitext(profile_pic.filename)[1].lower()
-                if file_ext not in allowed_image_types:
-                    return {
-                        "Status": "Error",
-                        "Message": "Profile picture must be an image file (JPG, JPEG, PNG, or GIF)"
-                    }
-                
-                # Validate file size (5MB limit)
-                profile_pic_content = await profile_pic.read()
-                if len(profile_pic_content) > 5 * 1024 * 1024:
-                    return {
-                        "Status": "Error",
-                        "Message": "Profile picture file size must be less than 5MB"
-                    }
-                
-                # Upload profile picture
-                profile_pic_path = f"profilepic/{response.user.id}/{profile_pic.filename}"
+        if profile_pic:
+            # Validate file type (images only)
+            allowed_image_types = ['.jpg', '.jpeg', '.png']
+            file_ext = os.path.splitext(profile_pic.filename)[1].lower()
+            if file_ext not in allowed_image_types:
+                return {
+                    "Status": "Error",
+                    "Message": "Profile picture must be an image file (JPG, JPEG, or PNG)"
+                }
+            
+            # Validate file size (5MB limit)
+            profile_pic_content = await profile_pic.read()
+            if len(profile_pic_content) > 5 * 1024 * 1024:
+                return {
+                    "Status": "Error",
+                    "Message": "Profile picture file size must be less than 5MB"
+                }
+            
+            # Upload profile picture
+            profile_pic_path = f"profilepic/{response.user.id}/{profile_pic.filename}"
+            try:
                 supabase_insert.storage.from_("profilepic").upload(profile_pic_path, profile_pic_content)
                 profile_pic_url = supabase.storage.from_("profilepic").get_public_url(profile_pic_path)
                 user_data["profile_pic_url"] = profile_pic_url
+            except Exception as e:
+                return {
+                    "Status": "Error",
+                    "Message": "Profile picture upload failed. Please try again.",
+                    "Details": f"{e}"
+                }
 
-            if pwd_id_front:
-                # Validate file type (images only)
-                file_ext = os.path.splitext(pwd_id_front.filename)[1].lower()
-                if file_ext not in allowed_image_types:
-                    return {
-                        "Status": "Error",
-                        "Message": "PWD ID front must be an image file (JPG, JPEG, PNG, or GIF)"
-                    }
-                
-                # Validate file size (5MB limit)
-                pwd_id_front_content = await pwd_id_front.read()
-                if len(pwd_id_front_content) > 5 * 1024 * 1024:
-                    return {
-                        "Status": "Error",
-                        "Message": "PWD ID front file size must be less than 5MB"
-                    }
-                
-                # Upload PWD ID front
-                pwd_id_front_path = f"pwdidfront/{response.user.id}/{pwd_id_front.filename}"
+
+        if pwd_id_front:
+            # Validate file type (images only)
+            file_ext = os.path.splitext(pwd_id_front.filename)[1].lower()
+            if file_ext not in allowed_image_types:
+                return {
+                    "Status": "Error",
+                    "Message": "PWD ID front must be an image file (JPG, JPEG, or PNG)"
+                }
+            
+            # Validate file size (5MB limit)
+            pwd_id_front_content = await pwd_id_front.read()
+            if len(pwd_id_front_content) > 5 * 1024 * 1024:
+                return {
+                    "Status": "Error",
+                    "Message": "PWD ID front file size must be less than 5MB"
+                }
+            
+            # Upload PWD ID front
+            pwd_id_front_path = f"pwdidfront/{response.user.id}/{pwd_id_front.filename}"
+            try:
                 supabase_insert.storage.from_("pwdidfront").upload(pwd_id_front_path, pwd_id_front_content)
                 pwd_id_front_url = supabase.storage.from_("pwdidfront").get_public_url(pwd_id_front_path)
                 user_data["pwd_id_front_url"] = pwd_id_front_url
+            except Exception as e:
+                return {
+                    "Status": "Error",
+                    "Message": "PWD ID front upload failed. Please try again.",
+                    "Details": f"{e}"
+                }
 
-            if pwd_id_back:
-                # Validate file type (images only)
-                file_ext = os.path.splitext(pwd_id_back.filename)[1].lower()
-                if file_ext not in allowed_image_types:
-                    return {
-                        "Status": "Error",
-                        "Message": "PWD ID back must be an image file (JPG, JPEG, PNG, or GIF)"
-                    }
-                
-                # Validate file size (5MB limit)
-                pwd_id_back_content = await pwd_id_back.read()
-                if len(pwd_id_back_content) > 5 * 1024 * 1024:
-                    return {
-                        "Status": "Error",
-                        "Message": "PWD ID back file size must be less than 5MB"
-                    }
-                
-                # Upload PWD ID back
-                pwd_id_back_path = f"pwdidback/{response.user.id}/{pwd_id_back.filename}"
+        if pwd_id_back:
+            # Validate file type (images only)
+            file_ext = os.path.splitext(pwd_id_back.filename)[1].lower()
+            if file_ext not in allowed_image_types:
+                return {
+                    "Status": "Error",
+                    "Message": "PWD ID back must be an image file (JPG, JPEG, or PNG)"
+                }
+            
+            # Validate file size (5MB limit)
+            pwd_id_back_content = await pwd_id_back.read()
+            if len(pwd_id_back_content) > 5 * 1024 * 1024:
+                return {
+                    "Status": "Error",
+                    "Message": "PWD ID back file size must be less than 5MB"
+                }
+            
+            # Upload PWD ID back
+            pwd_id_back_path = f"pwdidback/{response.user.id}/{pwd_id_back.filename}"
+            try:
                 supabase_insert.storage.from_("pwdidback").upload(pwd_id_back_path, pwd_id_back_content)
                 pwd_id_back_url = supabase.storage.from_("pwdidback").get_public_url(pwd_id_back_path)
                 user_data["pwd_id_back_url"] = pwd_id_back_url
+            except Exception as e:
+                return {
+                    "Status": "Error",
+                    "Message": "PWD ID back upload failed. Please try again.",
+                    "Details": f"{e}"
+                }
 
+        
+        try:
             # Insert all data into the database
             insert_data = supabase_insert.table("employee").insert(user_data).execute()
-            
-            return{
+            return {
                 "Status": "Successfull",
                 "Message": f"{full_name} has been successfully signed up",
                 "Details": insert_data.data
             }
         except Exception as e:
-            return{
-                "Status":"ERROR",
-                "Message:":"Internal error. Data insertion failed",
+            return {
+                "Status": "Error",
+                "Message": "Data insertion failed",
                 "Details": f"{e}"
             }
+    except Exception as e:
+        return{
+            "Status":"ERROR",
+            "Message:":"Internal error. Data insertion failed",
+            "Details": f"{e}"
+        }
 
 @app.post("/employee/login") # login employee
 async def login(user: loginCreds):
-    supabase: Client = create_client(url, key)
+    # validate input
+    if not user.email or not user.password:
+        return {
+            "Status": "Error",
+            "Message": "Email and password are required"
+        }
+    
     try:
+        supabase: Client = create_client(url, key)
         response = supabase.auth.sign_in_with_password(
             {
                 "email": user.email,
                 "password": user.password
             }
         )
-
-        # Get the session
-        session_key = response.session
-
-        if session_key:
-            access_token = session_key.access_token
-            refresh_token = session_key.refresh_token
-            auth_userID = response.user.id
-
-            session_data = {
-                "auth_userID": auth_userID,
-                "refresh_token": refresh_token
-            }
-
-            # Check if the user is in the employee table
-            employee_check = supabase.table("employee").select("*").eq("user_id", auth_userID).single().execute()
-
-            if employee_check.data:  # check for presence of data
-                # Store session in Redis with a key prefix
-                await redis.set(access_token, json.dumps(session_data), ex=None)
-
-                return {
-                    "Status": "Success",
-                    "Message": "Login successful. Session stored in Redis.",
-                    "Token": access_token,
-                    "Stored User ID": auth_userID
-                }
-            else:
-                return {
-                    "Status": "ERROR",
-                    "Message": "User is not an employee"
-                }
-        else:
-            return {
-                "Status": "ERROR",
-                "Message": "No session returned"
-            }
-
     except Exception as e:
         return {
-            "Status": "ERROR",
-            "Message": "Internal Server Error",
-            "Details": str(e)
+            "Status": "Error",
+            "Message": "Login failed. Please check your credentials.",
         }
+    
+    if not response:
+        return {
+            "Status": "Error",
+            "Message": "Authentication failed - no response received"
+        }
+    
+    if not response.user or not response.user.id:
+        return {
+            "Status": "Error",
+            "Message": "Authentication failed - invalid user data"
+        }
+    
+    if not response.session:
+        return {
+            "Status": "Error",
+            "Message": "Authentication failed - no session created"
+        }
+    
+    # extract session data safely
+    session_key = response.session
+    access_token = session_key.access_token
+    refresh_token = session_key.refresh_token
+    auth_userID = response.user.id
+    
+    # validate session tokens
+    if not access_token or not refresh_token:
+        return {
+            "Status": "Error",
+            "Message": "Authentication failed - invalid session tokens"
+        }
+    
+    # check if user exists in employee table
+    try:
+        employee_check = supabase.table("employee").select("*").eq("user_id", auth_userID).single().execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Failed to verify user account",
+        }
+    
+    # validate employee exists
+    if not employee_check.data:
+        return {
+            "Status": "Error",
+            "Message": "Account not found. Please contact support."
+        }
+    
+    # store session in Redis
+    session_data = {
+        "auth_userID": auth_userID,
+        "refresh_token": refresh_token
+    }
+    
+    try:
+        await redis.set(access_token, json.dumps(session_data), ex=None)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Login successful but session storage failed. Please try again.",
+        }
+    
+    # return success response
+    return {
+        "Status": "Success",
+        "Message": "Login successful",
+        "Token": access_token,
+        "User_ID": auth_userID
+    }
 
 
 @app.post("/employer/signup") # signup for employer
@@ -425,7 +520,15 @@ async def signUp(
     file: UploadFile = File(...)
 ):
     role = "employer"
-    #signing up the user
+    
+    # validate required file
+    if not file or not file.filename:
+        return {
+            "Status": "Error",
+            "Message": "Company logo is required"
+        }
+    
+    # sign up the user
     try:
         supabase = create_client(url, key)
         response = supabase.auth.sign_up(
@@ -434,177 +537,272 @@ async def signUp(
                 "password": password,
             }
         )
-        # print(supabase.auth.get_session())
     except Exception as e:
-        return{
-            "Status":"ERROR",
-            "Message":"Signing Up Failed",
-            "Details": f"{e}"
+        return {
+            "Status": "Error",
+            "Message": f"Signing Up Failed: {e}",
         }
     
-    if response:
-        try:
-            # Handle logo upload
-            file_content = await file.read()
-            
-            # Validate file type (allow common image formats)
-            allowed_types = ['.jpg', '.jpeg', '.png', '.gif']
-            file_ext = os.path.splitext(file.filename)[1].lower()
-            if file_ext not in allowed_types:
-                return {
-                    "Status": "ERROR",
-                    "Message": "Invalid file type. Allowed types: JPG, JPEG, PNG, GIF"
-                }
-            
-            # Validate file size (5MB limit)
-            if len(file_content) > 5 * 1024 * 1024:  # 5MB in bytes
-                return {
-                    "Status": "ERROR",
-                    "Message": "File size exceeds 5MB limit"
-                }
-            
-            # Upload logo to Supabase storage
-            logo_path = f"logos/{response.user.id}/{file.filename}"
-            supabase.storage.from_("companylogo").upload(logo_path, file_content)
-            
-            # Get the public URL for the uploaded logo
-            logo_url = supabase.storage.from_("companylogo").get_public_url(logo_path)
-            
-            supabase_insert = create_client(url, key) #re created a suapsbe client for insertion (Current band aid fix)
-            user_data = { # Structure the data to be inserted
-                "user_id": response.user.id,
-                "email": email,
-                "company_name": company_name,
-                "company_level": company_level,
-                "website_url": website_url,
-                "company_type": company_type,
-                "industry": industry,
-                "admin_name": admin_name,
-                "logo_url": logo_url,  # Store the logo URL
-                "description": description,
-                "location": location,
-                "tags": tags,
-                "role": role,
+    # validate response and user creation
+    if not response or not response.user or not response.user.id:
+        return {
+            "Status": "Error",
+            "Message": "User creation failed - no user ID returned"
+        }
+    
+    # process file upload and user data
+    try:
+        # Validate and read file
+        allowed_types = ['.jpg', '.jpeg', '.png', '.gif']
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        
+        if file_ext not in allowed_types:
+            return {
+                "Status": "Error",
+                "Message": "Invalid file type. Allowed types: JPG, JPEG, PNG, GIF"
             }
-            
-            # print(user_data)
-            
-            #Insert data "suer_data" to the table
+        
+        # Read file content safely
+        try:
+            file_content = await file.read()
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Failed to read uploaded file",
+                "Details": f"{e}"
+            }
+        
+        # Validate file size
+        if len(file_content) > 5 * 1024 * 1024:  # 5MB in bytes
+            return {
+                "Status": "Error",
+                "Message": "File size exceeds 5MB limit"
+            }
+        
+        # Upload logo to Supabase storage
+        logo_path = f"logos/{response.user.id}/{file.filename}"
+        try:
+            supabase.storage.from_("companylogo").upload(logo_path, file_content)
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Logo upload failed. Please try again.",
+                "Details": f"{e}"
+            }
+        
+        # Get the public URL for the uploaded logo
+        try:
+            logo_url = supabase.storage.from_("companylogo").get_public_url(logo_path)
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Failed to generate logo URL. Please try again.",
+                "Details": f"{e}"
+            }
+        
+        # Prepare user data
+        supabase_insert = create_client(url, key)
+        user_data = {
+            "user_id": response.user.id,
+            "email": email,
+            "company_name": company_name,
+            "company_level": company_level,
+            "website_url": website_url,
+            "company_type": company_type,
+            "industry": industry,
+            "admin_name": admin_name,
+            "logo_url": logo_url,
+            "description": description,
+            "location": location,
+            "tags": tags,
+            "role": role,
+        }
+        
+        # Insert data into database
+        try:
             insert_data = supabase_insert.table("employers").insert(user_data).execute()
             
             if insert_data.data:
-                return{
-                    "Status": "Successfull",
-                        "Message": f"{company_name} has been successfully signed up",
-                        "Details": f"{insert_data}"
-                    }
+                return {
+                    "Status": "Success",
+                    "Message": f"{company_name} has been successfully signed up",
+                    "Details": insert_data.data
+                }
             else:
                 return {
                     "Status": "Error",
-                    "Message": "Updating not Succesfull",
-                    "Details": f"{insert_data}"
+                    "Message": "Signup failed - no data returned from database",
                 }
         except Exception as e:
-            return{
-                "Status":"ERROR",
-                "Message:":"Internal error. Data insertion failed",
+            return {
+                "Status": "Error",
+                "Message": "Database insertion failed. Please try again.",
                 "Details": f"{e}"
             }
+            
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal error. Data processing failed",
+            "Details": f"{e}"
+        }
          
 @app.post("/employer/login") # login employer
 async def login(user: loginCreds):
-    supabase: Client = create_client(url, key)
+    # validate input
+    if not user.email or not user.password:
+        return {
+            "Status": "Error",
+            "Message": "Email and password are required"
+        }
+    
+    # attempt authentication
     try:
+        supabase: Client = create_client(url, key)
         response = supabase.auth.sign_in_with_password(
             {
                 "email": user.email,
                 "password": user.password
             }
         )
-
-        # Get the session
-        session_key = response.session
-
-        if session_key:
-            access_token = session_key.access_token
-            refresh_token = session_key.refresh_token
-            auth_userID = response.user.id
-
-            session_data = {
-                "auth_userID": auth_userID,
-                "refresh_token": refresh_token
-            }
-
-            # Check if the user is in the employee table
-            employee_check = supabase.table("employers").select("*").eq("user_id", auth_userID).single().execute()
-
-            if employee_check.data:  # check for presence of data
-                # Store session in Redis with a key prefix
-                await redis.set(access_token, json.dumps(session_data), ex=None)
-
-                return {
-                    "Status": "Success",
-                    "Message": "Login successful. Session stored in Redis.",
-                    "Token": access_token,
-                    "Stored User ID": auth_userID
-                }
-            else:
-                return {
-                    "Status": "ERROR",
-                    "Message": "User is not an employee"
-                }
-        else:
-            return {
-                "Status": "ERROR",
-                "Message": "No session returned"
-            }
-
     except Exception as e:
         return {
-            "Status": "ERROR",
-            "Message": "Internal Server Error",
-            "Details": str(e)
+            "Status": "Error",
+            "Message": "Login failed. Please check your credentials.",
         }
-
+    
+    # validate authentication response
+    if not response:
+        return {
+            "Status": "Error",
+            "Message": "Authentication failed - no response received"
+        }
+    
+    if not response.user or not response.user.id:
+        return {
+            "Status": "Error",
+            "Message": "Authentication failed - invalid user data"
+        }
+    
+    if not response.session:
+        return {
+            "Status": "Error",
+            "Message": "Authentication failed - no session created"
+        }
+    
+    # extract session data safely
+    session_key = response.session
+    access_token = session_key.access_token
+    refresh_token = session_key.refresh_token
+    auth_userID = response.user.id
+    
+    # Validate session tokens
+    if not access_token or not refresh_token:
+        return {
+            "Status": "Error",
+            "Message": "Authentication failed - invalid session tokens"
+        }
+    
+    # check if user exists in employers table
+    try:
+        employer_check = supabase.table("employers").select("*").eq("user_id", auth_userID).single().execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Failed to verify employer account",
+        }
+    
+    # validate employer exists
+    if not employer_check.data:
+        return {
+            "Status": "Error",
+            "Message": "Account not found or not registered as an employer"
+        }
+    
+    # store session in Redis
+    session_data = {
+        "auth_userID": auth_userID,
+        "refresh_token": refresh_token
+    }
+    
+    try:
+        await redis.set(access_token, json.dumps(session_data), ex=None)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Login successful but session storage failed. Please try again.",
+        }
+    
+    # return success response
+    return {
+        "Status": "Success",
+        "Message": "Login successful",
+        "Token": access_token,
+        "User_ID": auth_userID
+    }
 #profile management
 @app.get("/profile/view-profile") # view profile
 async def viewProfile(request: Request):
+    # authentication
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
+        if not auth_userID:
+            return {
+                "Status": "Error",
+                "Message": "Invalid user ID"
+            }
         supabase = create_client(url, key)
-        
-        # print(f"Fetching profile for user_id: {auth_userID}")
-        
-        #Checking both tables if the user is an employee or employer
-        
-        response_employer = supabase.table("employers").select("*").eq("user_id", auth_userID).single().execute()
-        
-        if response_employer.data:
-            return {"Profile": response_employer.data}
-        
-        response_employee = supabase.table("employee").select("*").eq("user_id", auth_userID).single().execute()
-        
-        if response_employee.data:
-            return {"Profile": response_employee.data}
-        
-        # Not found in either table
-        return {
-            "Status": "ERROR",
-            "Message": "User profile not found in employers or employees tables"
-        }
     except Exception as e:
-        print(f"Error fetching profile: {e}")
         return {
-            "Status": "ERROR",
-            "Message": "Internal Server Error",
-            "Details": str(e)
+            "Status": "Error",
+            "Message": "Authentication failed",
+            "Details": f"{e}"
         }
+    
+    # check employer table first
+    try:
+        response_employer = supabase.table("employers").select("*").eq("user_id", auth_userID).single().execute()
+    except Exception as e:
+        # Continue to check employee table - this might just mean user is not an employer
+        response_employer = None
+    
+    if response_employer and response_employer.data:
+        return {
+            "Status": "Success",
+            "Message": "Employer profile retrieved successfully",
+            "Profile": response_employer.data,
+            "UserType": "employer"
+        }
+    
+    # check employee table
+    try:
+        response_employee = supabase.table("employee").select("*").eq("user_id", auth_userID).single().execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Failed to retrieve profile data",
+            "Details": f"{e}"
+        }
+    
+    if response_employee and response_employee.data:
+        return {
+            "Status": "Success",
+            "Message": "Employee profile retrieved successfully",
+            "Profile": response_employee.data,
+            "UserType": "employee"
+        }
+    
+    # not found in either table
+    return {
+        "Status": "Error",
+        "Message": "User profile not found. Please contact support."
+    }
 
 # Profile Update
 #this will update only name, skills, and disability 
 
 @app.post("/profile/employer/update-profile")
-async def updateProfile(
+async def updateEmployerProfile(
     request: Request,
     company_name: str = Form(None),
     company_level: str = Form(None),
@@ -619,106 +817,150 @@ async def updateProfile(
 ):
     def not_empty(val):
         return val not in [None, ""]
+    
+    # authentication
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
-        
-        # Check if the user is an employer
-        search_employer = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
-        
-        if search_employer.data and search_employer.data["user_id"] == auth_userID:
-            updated_details = {}
-
-            if not_empty(company_name):
-                updated_details["company_name"] = company_name
-            if not_empty(company_level):
-                updated_details["company_level"] = company_level
-            if not_empty(website_url):
-                updated_details["website_url"] = website_url
-            if not_empty(company_type):
-                updated_details["company_type"] = company_type
-            if not_empty(industry):
-                updated_details["industry"] = industry
-            if not_empty(admin_name):
-                updated_details["admin_name"] = admin_name
-            if not_empty(description):
-                updated_details["description"] = description
-            if not_empty(location):
-                updated_details["location"] = location
-            if not_empty(tags):
-                updated_details["tags"] = tags
-
-            # Handle logo upload if provided and not empty
-            if logo and logo.filename:
-                allowed_types = ['.jpg', '.jpeg', '.png', '.gif']
-                file_ext = os.path.splitext(logo.filename)[1].lower()
-                if file_ext not in allowed_types:
-                    # If the file is empty (no filename), just skip updating logo
-                    return {
-                        "Status": "Error",
-                        "Message": "Invalid logo file type. Allowed: JPG, JPEG, PNG, GIF"
-                    }
-                logo_content = await logo.read()
-                if len(logo_content) == 0:
-                    # If the file is empty, skip updating logo
-                    pass
-                elif len(logo_content) > 5 * 1024 * 1024:
-                    return {
-                        "Status": "Error",
-                        "Message": "Logo file size must be less than 5MB"
-                    }
-                else:
-                    logo_path = f"logos/{auth_userID}/{logo.filename}"
-                    supabase.storage.from_("companylogo").upload(logo_path, logo_content)
-                    logo_url = supabase.storage.from_("companylogo").get_public_url(logo_path)
-                    updated_details["logo_url"] = logo_url
-
-            if not updated_details:
-                return {
-                    "Status": "Error",
-                    "Message": "No valid fields provided for update."
-                }
-
-            try:
-                update_employer_res = supabase.table("employers").update(updated_details).eq("user_id", auth_userID).execute()
-                if update_employer_res.data:
-                        return {
-                        "Status": "Successfull",
-                        "Message": "Update successfull"
-                    }
-                else:
-                    return {
-                        "Status": "Error",
-                        "Message": "Updating not Succesfull",
-                        "Details": f"{update_employer_res}" 
-                        }
-            except Exception as e:
-                if "Duplicate" in str(e) or "already exists" in str(e):
-                    return {
-                        "Status": "Error",
-                        "Message": "A unique field value you are trying to update already exists for another employer.",
-                        "Details": str(e)
-                    }
-                return {
-                    "Status": "Error",
-                    "Message": "Internal Server Error",
-                    "Details": str(e)
-                 }
-        else:
+        if not auth_userID:
             return {
                 "Status": "Error",
-                "Message": "Cant find user",
-                "Details": f"{search_employer}" 
+                "Message": "Invalid user ID"
             }
+        supabase = create_client(url, service_key)
     except Exception as e:
         return {
             "Status": "Error",
-            "Message": "Internal Server Error",
+            "Message": "Authentication failed",
             "Details": f"{e}"
         }
+    
+    # verify user is an employer
+    try:
+        search_employer = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Failed to verify employer account",
+            "Details": f"{e}"
+        }
+    
+    if not search_employer.data:
+        return {
+            "Status": "Error",
+            "Message": "Account not found in employers table"
+        }
+    
+    # build update data
+    updated_details = {}
 
+    # Add text fields if provided
+    if not_empty(company_name):
+        updated_details["company_name"] = company_name
+    if not_empty(company_level):
+        updated_details["company_level"] = company_level
+    if not_empty(website_url):
+        updated_details["website_url"] = website_url
+    if not_empty(company_type):
+        updated_details["company_type"] = company_type
+    if not_empty(industry):
+        updated_details["industry"] = industry
+    if not_empty(admin_name):
+        updated_details["admin_name"] = admin_name
+    if not_empty(description):
+        updated_details["description"] = description
+    if not_empty(location):
+        updated_details["location"] = location
+    if not_empty(tags):
+        updated_details["tags"] = tags
+
+    # handle logo upload if provided
+    if logo and logo.filename:
+        # Validate file type
+        allowed_types = ['.jpg', '.jpeg', '.png', '.gif']
+        file_ext = os.path.splitext(logo.filename)[1].lower()
+        if file_ext not in allowed_types:
+            return {
+                "Status": "Error",
+                "Message": "Invalid logo file type. Allowed: JPG, JPEG, PNG, GIF"
+            }
+        
+        # Read and validate file content
+        try:
+            logo_content = await logo.read()
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Failed to read logo file",
+                "Details": f"{e}"
+            }
+        
+        if len(logo_content) == 0:
+            # Empty file, skip logo update
+            pass
+        elif len(logo_content) > 5 * 1024 * 1024:
+            return {
+                "Status": "Error",
+                "Message": "Logo file size must be less than 5MB"
+            }
+        else:
+            # Upload logo
+            logo_path = f"logos/{auth_userID}/{logo.filename}"
+            try:
+                supabase.storage.from_("companylogo").upload(logo_path, logo_content, {"upsert": "true"})
+            except Exception as e:
+                return {
+                    "Status": "Error",
+                    "Message": "Logo upload failed. Please try again.",
+                    "Details": f"{e}"
+                }
+            
+            # Get logo URL
+            try:
+                logo_url = supabase.storage.from_("companylogo").get_public_url(logo_path)
+                updated_details["logo_url"] = logo_url
+            except Exception as e:
+                return {
+                    "Status": "Error",
+                    "Message": "Logo URL retrieval failed. Please try again.",
+                    "Details": f"{e}"
+                }
+
+    # check if any updates were provided
+    if not updated_details:
+        return {
+            "Status": "Error",
+            "Message": "No valid fields provided for update"
+        }
+
+    # update database
+    try:
+        update_employer_res = supabase.table("employers").update(updated_details).eq("user_id", auth_userID).execute()
+        
+        if update_employer_res.data:
+            return {
+                "Status": "Success",
+                "Message": "Profile updated successfully",
+                "Data": update_employer_res.data
+            }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "Update failed - no data returned"
+            }
+    except Exception as e:
+        if "Duplicate" in str(e) or "already exists" in str(e):
+            return {
+                "Status": "Error",
+                "Message": "A unique field value you are trying to update already exists for another employer",
+                "Details": str(e)
+            }
+        return {
+            "Status": "Error",
+            "Message": "Database update failed",
+            "Details": f"{e}"
+        }
 @app.post("/profile/employee/update-profile")
-async def updateProfile(
+async def updateEmployeeProfile(
     request: Request,
     full_name: str = Form(None),
     address: str = Form(None),
@@ -731,124 +973,199 @@ async def updateProfile(
 ):
     def not_empty(val):
         return val not in [None, ""]
+    
+    # authentication
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
-        
-        # Check if the user is an employee
-        search_employee = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
-        
-        if search_employee.data and search_employee.data["user_id"] == auth_userID:
-            updated_details = {}
-
-            if not_empty(full_name):
-                updated_details["full_name"] = full_name
-            if not_empty(address):
-                updated_details["address"] = address
-            if not_empty(phone_number):
-                updated_details["phone_number"] = phone_number
-            if not_empty(short_bio):
-                updated_details["short_bio"] = short_bio
-            if not_empty(disability):
-                updated_details["disability"] = disability
-            if not_empty(skills):
-                updated_details["skills"] = skills
-
-            # Handle resume upload if provided and not empty
-            if resume and resume.filename:
-                if not resume.filename.lower().endswith('.pdf'):
-                    return {
-                        "Status": "Error",
-                        "Message": "Resume must be a PDF file"
-                    }
-                resume_content = await resume.read()
-                if len(resume_content) == 0:
-                    pass
-                elif len(resume_content) > 5 * 1024 * 1024:
-                    return {
-                        "Status": "Error",
-                        "Message": "Resume file size must be less than 5MB"
-                    }
-                else:
-                    resume_path = f"resumes/{auth_userID}/{resume.filename}"
-                    supabase.storage.from_("resumes").upload(
-                        resume_path,
-                        resume_content,
-                        {
-                            "content-type": "application/pdf",
-                            "upsert": "true",
-                        },
-                    )
-                    resume_url = supabase.storage.from_("resumes").get_public_url(resume_path)
-                    updated_details["resume_url"] = resume_url
-
-            # Handle profile picture upload if provided and not empty
-            if profile_pic and profile_pic.filename:
-                allowed_image_types = ['.jpg', '.jpeg', '.png', '.gif']
-                file_ext = os.path.splitext(profile_pic.filename)[1].lower()
-                if file_ext not in allowed_image_types:
-                    return {
-                        "Status": "Error",
-                        "Message": "Profile picture must be an image file (JPG, JPEG, PNG, or GIF)"
-                    }
-                profile_pic_content = await profile_pic.read()
-                if len(profile_pic_content) == 0:
-                    pass
-                elif len(profile_pic_content) > 5 * 1024 * 1024:
-                    return {
-                        "Status": "Error",
-                        "Message": "Profile picture file size must be less than 5MB"
-                    }
-                else:
-                    profile_pic_path = f"profilepic/{auth_userID}/{profile_pic.filename}"
-                    supabase.storage.from_("profilepic").upload(profile_pic_path, profile_pic_content)
-                    profile_pic_url = supabase.storage.from_("profilepic").get_public_url(profile_pic_path)
-                    updated_details["profile_pic_url"] = profile_pic_url
-
-            if not updated_details:
-                return {
-                    "Status": "Error",
-                    "Message": "No valid fields provided for update."
-                }
-
-            try:
-                update_employee_res = supabase.table("employee").update(updated_details).eq("user_id", auth_userID).execute()
-                if update_employee_res.data:
-                        return {
-                        "Status": "Successfull",
-                        "Message": "Update successfull"
-                    }
-                else:
-                    return {
-                        "Status": "Error",
-                        "Message": "Updating not Succesfull",
-                        "Details": f"{update_employee_res}" 
-                        }
-            except Exception as e:
-                if "Duplicate" in str(e) or "already exists" in str(e):
-                    return {
-                        "Status": "Error",
-                        "Message": "A unique field value you are trying to update already exists for another employee.",
-                        "Details": str(e)
-                    }
-                return {
-                    "Status": "Error",
-                    "Message": "Internal Server Error",
-                    "Details": str(e)
-                 }
-        else:
+        if not auth_userID:
             return {
                 "Status": "Error",
-                "Message": "Cant find user",
-                "Details": f"{search_employee}" 
+                "Message": "Invalid user ID"
             }
+        supabase = create_client(url, service_key)
     except Exception as e:
         return {
             "Status": "Error",
-            "Message": "Internal Server Error",
+            "Message": "Authentication failed",
             "Details": f"{e}"
         }
+    
+    # verify user is an employee
+    try:
+        search_employee = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Failed to verify employee account",
+            "Details": f"{e}"
+        }
+    
+    if not search_employee.data:
+        return {
+            "Status": "Error",
+            "Message": "Account not found in employees table"
+        }
+    
+    # build update data
+    updated_details = {}
 
+    # Add text fields if provided
+    if not_empty(full_name):
+        updated_details["full_name"] = full_name
+    if not_empty(address):
+        updated_details["address"] = address
+    if not_empty(phone_number):
+        updated_details["phone_number"] = phone_number
+    if not_empty(short_bio):
+        updated_details["short_bio"] = short_bio
+    if not_empty(disability):
+        updated_details["disability"] = disability
+    if not_empty(skills):
+        updated_details["skills"] = skills
+
+    # handle resume upload if provided
+    if resume and resume.filename:
+        # Validate file type
+        if not resume.filename.lower().endswith('.pdf'):
+            return {
+                "Status": "Error",
+                "Message": "Resume must be a PDF file"
+            }
+        
+        # Read and validate file content
+        try:
+            resume_content = await resume.read()
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Failed to read resume file",
+                "Details": f"{e}"
+            }
+        
+        if len(resume_content) == 0:
+            # Empty file, skip resume update
+            pass
+        elif len(resume_content) > 5 * 1024 * 1024:
+            return {
+                "Status": "Error",
+                "Message": "Resume file size must be less than 5MB"
+            }
+        else:
+            # Upload resume
+            resume_path = f"resumes/{auth_userID}/{resume.filename}"
+            try:
+                supabase.storage.from_("resumes").upload(
+                    resume_path,
+                    resume_content,
+                    {
+                        "content-type": "application/pdf",
+                        "upsert": "true",
+                    },
+                )
+            except Exception as e:
+                return {
+                    "Status": "Error",
+                    "Message": "Resume upload failed. Please try again.",
+                    "Details": f"{e}"
+                }
+            
+            # Get resume URL
+            try:
+                resume_url = supabase.storage.from_("resumes").get_public_url(resume_path)
+                updated_details["resume_url"] = resume_url
+            except Exception as e:
+                return {
+                    "Status": "Error",
+                    "Message": "Resume URL retrieval failed. Please try again.",
+                    "Details": f"{e}"
+                }
+
+    # handle profile picture upload if provided
+    if profile_pic and profile_pic.filename:
+        # Validate file type
+        allowed_image_types = ['.jpg', '.jpeg', '.png']
+        file_ext = os.path.splitext(profile_pic.filename)[1].lower()
+        if file_ext not in allowed_image_types:
+            return {
+                "Status": "Error",
+                "Message": "Profile picture must be an image file (JPG, JPEG, or PNG)"
+            }
+        
+        # Read and validate file content
+        try:
+            profile_pic_content = await profile_pic.read()
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Failed to read profile picture file",
+                "Details": f"{e}"
+            }
+        
+        if len(profile_pic_content) == 0:
+            # Empty file, skip profile picture update
+            pass
+        elif len(profile_pic_content) > 5 * 1024 * 1024:
+            return {
+                "Status": "Error",
+                "Message": "Profile picture file size must be less than 5MB"
+            }
+        else:
+            # Upload profile picture
+            profile_pic_path = f"profilepic/{auth_userID}/{profile_pic.filename}"
+            try:
+                supabase.storage.from_("profilepic").upload(profile_pic_path, profile_pic_content, {"upsert": "true"})
+            except Exception as e:
+                return {
+                    "Status": "Error",
+                    "Message": "Profile picture upload failed. Please try again.",
+                    "Details": f"{e}"
+                }
+            
+            # Get profile picture URL
+            try:
+                profile_pic_url = supabase.storage.from_("profilepic").get_public_url(profile_pic_path)
+                updated_details["profile_pic_url"] = profile_pic_url
+            except Exception as e:
+                return {
+                    "Status": "Error",
+                    "Message": "Profile picture URL retrieval failed. Please try again.",
+                    "Details": f"{e}"
+                }
+
+    # check if any updates were provided
+    if not updated_details:
+        return {
+            "Status": "Error",
+            "Message": "No valid fields provided for update"
+        }
+
+    # update database
+    try:
+        update_employee_res = supabase.table("employee").update(updated_details).eq("user_id", auth_userID).execute()
+        
+        if update_employee_res.data:
+            return {
+                "Status": "Success",
+                "Message": "Profile updated successfully",
+                "Data": update_employee_res.data
+            }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "Update failed - no data returned"
+            }
+    except Exception as e:
+        if "Duplicate" in str(e) or "already exists" in str(e):
+            return {
+                "Status": "Error",
+                "Message": "A unique field value you are trying to update already exists for another employee",
+                "Details": str(e)
+            }
+        return {
+            "Status": "Error",
+            "Message": "Database update failed",
+            "Details": f"{e}"
+        }
 #job shii
 
 #create jobs
@@ -856,50 +1173,63 @@ async def updateProfile(
 
 @app.post("/jobs/create-jobs")
 async def createJob(job: jobCreation, request: Request):
+    #check if the user is authenticated
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
         #check first if the user exist as an employer
         supabase: Client = create_client(url, service_key)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error"
+        }
+    
+    #check if the user exist as an employer
+    try:
         search_id = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
-        
-        if search_id:
-            # structure teh data to be created
-            jobs_data = {
-                "user_id": auth_userID,
-                "title": job.title,
-                "job_description": job.description,
-                "skill_1": job.skill_1,
-                "skill_2": job.skill_2,
-                "skill_3": job.skill_3,
-                "skill_4": job.skill_4,
-                "skill_5": job.skill_5,
-                "pwd_friendly": job.pwd_friendly,
-                "company_name": job.company_name,
-                "location": job.location,
-                "job_type": job.job_type,
-                "industry": job.industry,
-                "experience": job.experience,
-                "min_salary": job.min_salary,
-                "max_salary": job.max_salary
-            }
-            
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "User not found in employers table"
+        }
+    
+    if search_id:
+        # structure teh data to be created
+        jobs_data = {
+            "user_id": auth_userID,
+            "title": job.title,
+            "job_description": job.description,
+            "skill_1": job.skill_1,
+            "skill_2": job.skill_2,
+            "skill_3": job.skill_3,
+            "skill_4": job.skill_4,
+            "skill_5": job.skill_5,
+            "pwd_friendly": job.pwd_friendly,
+            "company_name": job.company_name,
+            "location": job.location,
+            "job_type": job.job_type,
+            "industry": job.industry,
+            "experience": job.experience,
+            "min_salary": job.min_salary,
+            "max_salary": job.max_salary
+        }
+        try:
             insert_response = supabase.table("jobs").insert(jobs_data).execute()
-            
             return{
                 "Status": "Sucessfull",
                 "Message": "Job has been created",
                 "Details": f"{insert_response}"
             }
-        else:
+        except Exception as e:
             return {
                 "Status": "Error",
-                "Message": "Maybe the employer dosen't exist"
+                "Message": "Job Creation Failed. Please try again.",
+                "Details": str(e)
             }
-    except Exception as e:
-        return{
-            "Status": "Internal Server Error",
-            "Message": "Some sort of error",
-            "Details": f"{e}"
+    else:
+        return {
+            "Status": "Error",
+            "Message": "Maybe the employer dosen't exist"
         }
 
 @app.get("/jobs/view-all-jobs")
@@ -907,21 +1237,25 @@ async def viewAllJobs(request: Request):
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
         supabase = create_client(url, key)
-        
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error"
+        }
+    try: 
         all_jobs = supabase.table("jobs").select("*").eq("user_id", auth_userID).execute()
         
         if all_jobs:
             return {"jobs": all_jobs.data}
-        
-        return {
-            "Status": "ERROR",
-            "Message": "No Jobs Found"
-        }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "No Jobs Found"
+            }
     except Exception as e:
-        return{
-            "Status": "ERROR",
-            "Message": "Internal Server Error",
-            "Details": f"{e}"
+        return {
+            "Status": "Error",
+            "Message": "Failed to retrieve jobs from database"
         }
 
 @app.get("/jobs/view-job/{id}")
