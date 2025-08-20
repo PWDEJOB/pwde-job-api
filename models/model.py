@@ -85,3 +85,11 @@ class ChatMessage(BaseModel):
     job_id: str
     type: Literal["text","google_meet_link","form_link","status_update"]
     message: str
+
+class PasswordReset(BaseModel):
+    email: str
+
+class PasswordResetConfirm(BaseModel):
+    email: str
+    token: str  # 6-digit OTP code
+    new_password: str

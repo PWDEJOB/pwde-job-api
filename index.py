@@ -4,11 +4,12 @@ from fastapi import File, UploadFile, Depends
 from typing import List
 import json
 from redis_server.redis_client import redis
-from models.model import updateEmployer, updateEmployee, loginCreds, inputSignupEmployer, inputSignupEmployee, jobCreation, updateJob
+from models.model import updateEmployer, updateEmployee, loginCreds, inputSignupEmployer, inputSignupEmployee, jobCreation, updateJob, PasswordReset, PasswordResetConfirm
 import ast
 from datetime import datetime
 import httpx
 import asyncio
+import re
 
 app = FastAPI()
 app.add_middleware(
@@ -1618,6 +1619,255 @@ async def logout(request: Request):
             "Status": "ERROR",
             "Message": "Logout failed",
             "Details": str(e)
+        }
+
+# ======== Password Reset Endpoints ========
+
+@app.post("/auth/request-password-reset")
+async def request_password_reset(reset_request: PasswordReset):
+    """
+    Send a password reset email to the user.
+    This uses Supabase's built-in password reset functionality.
+    """
+    try:
+        # Validate email input
+        if not reset_request.email or not reset_request.email.strip():
+            return {
+                "Status": "Error",
+                "Message": "Email is required"
+            }
+        
+        email = reset_request.email.strip().lower()
+        
+        # Basic email format validation
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email):
+            return {
+                "Status": "Error",
+                "Message": "Please enter a valid email address"
+            }
+        
+        # Initialize Supabase client with error handling
+        try:
+            supabase: Client = create_client(url, service_key)
+        except Exception as client_error:
+            print(f"❌ Failed to initialize Supabase client: {str(client_error)}")
+            return {
+                "Status": "Error",
+                "Message": "Service temporarily unavailable. Please try again later."
+            }
+        
+        # Use Supabase's built-in password reset functionality with OTP
+        try:
+            response = supabase.auth.reset_password_for_email(email)
+            # Note: No redirect_to needed for OTP flow, Supabase will send a 6-digit code
+            
+            # Log successful request (without exposing sensitive data)
+            print(f"✅ Password reset requested for email: {email[:3]}***@{email.split('@')[1] if '@' in email else 'unknown'}")
+            
+        except Exception as supabase_error:
+            error_message = str(supabase_error).lower()
+            
+            # Handle specific Supabase errors
+            if "rate limit" in error_message or "too many requests" in error_message:
+                return {
+                    "Status": "Error",
+                    "Message": "Too many password reset requests. Please wait a few minutes before trying again."
+                }
+            elif "invalid email" in error_message or "email not found" in error_message:
+                # Still return generic message for security (prevent email enumeration)
+                pass
+            elif "network" in error_message or "connection" in error_message:
+                return {
+                    "Status": "Error",
+                    "Message": "Network error. Please check your connection and try again."
+                }
+            else:
+                print(f"❌ Supabase password reset error: {str(supabase_error)}")
+        
+        # Always return success message for security reasons (to prevent email enumeration)
+        return {
+            "Status": "Success",
+            "Message": "If an account with this email exists, a 6-digit reset code has been sent to your email address. Please check your inbox and spam folder."
+        }
+        
+    except Exception as e:
+        print(f"❌ Unexpected error in password reset request: {str(e)}")
+        return {
+            "Status": "Error",
+            "Message": "An unexpected error occurred. Please try again later.",
+            "Details": "Internal server error" if not str(e) else None
+        }
+
+@app.post("/auth/confirm-password-reset")
+async def confirm_password_reset(reset_confirm: PasswordResetConfirm):
+    """
+    Confirm password reset using the token from email and set new password.
+    """
+    try:
+        # Comprehensive input validation
+        if not reset_confirm.email or not reset_confirm.email.strip():
+            return {
+                "Status": "Error",
+                "Message": "Email is required"
+            }
+        
+        if not reset_confirm.token or not reset_confirm.token.strip():
+            return {
+                "Status": "Error",
+                "Message": "6-digit reset code is required"
+            }
+        
+        # Validate OTP format (6 digits)
+        otp_code = reset_confirm.token.strip()
+        if not re.match(r'^\d{6}$', otp_code):
+            return {
+                "Status": "Error",
+                "Message": "Reset code must be exactly 6 digits"
+            }
+        
+        if not reset_confirm.new_password:
+            return {
+                "Status": "Error",
+                "Message": "New password is required"
+            }
+        
+        # Email format validation
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, reset_confirm.email.strip().lower()):
+            return {
+                "Status": "Error",
+                "Message": "Please enter a valid email address"
+            }
+        
+        # Enhanced password strength validation
+        new_password = reset_confirm.new_password
+        if len(new_password) < 6:
+            return {
+                "Status": "Error",
+                "Message": "Password must be at least 6 characters long"
+            }
+        
+        if len(new_password) > 128:
+            return {
+                "Status": "Error",
+                "Message": "Password is too long (maximum 128 characters)"
+            }
+        
+        # Check for at least one letter and one number for better security
+        if not re.search(r'[A-Za-z]', new_password) or not re.search(r'\d', new_password):
+            return {
+                "Status": "Error",
+                "Message": "Password must contain at least one letter and one number"
+            }
+        
+        # Initialize Supabase client with error handling
+        try:
+            supabase: Client = create_client(url, service_key)
+        except Exception as client_error:
+            print(f"❌ Failed to initialize Supabase client: {str(client_error)}")
+            return {
+                "Status": "Error",
+                "Message": "Service temporarily unavailable. Please try again later."
+            }
+        
+        # Verify the reset token and update password
+        try:
+            # Use Supabase auth to verify OTP code and update password
+            response = supabase.auth.verify_otp(
+                {
+                    "email": reset_confirm.email.strip().lower(),
+                    "token": otp_code,  # Use the validated 6-digit code
+                    "type": "recovery"
+                }
+            )
+            
+            if not response or not response.user:
+                return {
+                    "Status": "Error",
+                    "Message": "Invalid or expired reset code. Please request a new password reset."
+                }
+            
+            # Update the user's password
+            try:
+                update_response = supabase.auth.update_user(
+                    {
+                        "password": new_password
+                    }
+                )
+                
+                if not update_response or not update_response.user:
+                    print(f"❌ Failed to update password for user: {response.user.id}")
+                    return {
+                        "Status": "Error",
+                        "Message": "Failed to update password. Please try again or contact support."
+                    }
+                
+                # Log successful password reset (without sensitive data)
+                print(f"✅ Password successfully reset for user: {response.user.id}")
+                
+                return {
+                    "Status": "Success",
+                    "Message": "Password has been reset successfully. You can now login with your new password."
+                }
+                
+            except Exception as update_error:
+                error_message = str(update_error).lower()
+                
+                if "weak password" in error_message or "password" in error_message and "requirements" in error_message:
+                    return {
+                        "Status": "Error",
+                        "Message": "Password does not meet security requirements. Please choose a stronger password."
+                    }
+                elif "rate limit" in error_message:
+                    return {
+                        "Status": "Error",
+                        "Message": "Too many attempts. Please wait a few minutes before trying again."
+                    }
+                else:
+                    print(f"❌ Password update error: {str(update_error)}")
+                    return {
+                        "Status": "Error",
+                        "Message": "Failed to update password. Please try again."
+                    }
+                
+        except Exception as auth_error:
+            error_message = str(auth_error).lower()
+            
+            # Handle specific authentication errors
+            if "invalid" in error_message and ("token" in error_message or "otp" in error_message):
+                return {
+                    "Status": "Error",
+                    "Message": "Invalid reset code. Please request a new password reset."
+                }
+            elif "expired" in error_message:
+                return {
+                    "Status": "Error",
+                    "Message": "Reset code has expired. Please request a new password reset."
+                }
+            elif "rate limit" in error_message or "too many" in error_message:
+                return {
+                    "Status": "Error",
+                    "Message": "Too many attempts. Please wait a few minutes before trying again."
+                }
+            elif "network" in error_message or "connection" in error_message:
+                return {
+                    "Status": "Error",
+                    "Message": "Network error. Please check your connection and try again."
+                }
+            else:
+                print(f"❌ Auth verification error: {str(auth_error)}")
+                return {
+                    "Status": "Error",
+                    "Message": "Authentication failed. Please request a new password reset."
+                }
+        
+    except Exception as e:
+        print(f"❌ Unexpected error in password reset confirmation: {str(e)}")
+        return {
+            "Status": "Error",
+            "Message": "An unexpected error occurred. Please try again later.",
+            "Details": "Internal server error" if not str(e) else None
         }
 
 @app.post("/upload-resume")
