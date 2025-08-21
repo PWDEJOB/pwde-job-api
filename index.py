@@ -199,6 +199,108 @@ async def sendNotification(user_id: str, receiver_id: str, content: str, categor
         print(f"Error type: {type(e)}")#
         raise e 
 
+#Push notification
+async def get_user_push_token(user_id: str) -> str:
+    """Get the active push token for a user from the database"""
+    try:
+        supabase = create_client(url, service_key)
+        response = supabase.table("push_tokens").select("expo_token").eq("user_id", user_id).eq("active", True).execute()
+        
+        if response.data and len(response.data) > 0:
+            return response.data[0]["expo_token"]
+        return None
+    except Exception as e:
+        print(f"❌ Error getting push token for user {user_id}: {str(e)}")
+        return None
+
+async def send_push_notification(expo_token: str, title: str, body: str, data: dict = None):
+    """Send push notification via Expo Push API"""
+    try:
+        notification_payload = {
+            "to": expo_token,
+            "title": title,
+            "body": body,
+            "sound": "default",
+            "priority": "high"
+        }
+        
+        if data:
+            notification_payload["data"] = data
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://exp.host/--/api/v2/push/send",
+                json=notification_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                }
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"✅ Push notification sent successfully: {result}")
+                return result
+            else:
+                print(f"❌ Failed to send push notification: {response.status_code} - {response.text}")
+                return None
+                
+    except Exception as e:
+        print(f"❌ Error sending push notification: {str(e)}")
+        return None
+
+def get_notification_content(message_type: str):
+    """Get appropriate notification title and body based on message type"""
+    if message_type == "google_meet_link":
+        return {
+            "title": "🎥 Interview Scheduled!",
+            "body": "You have a new interview scheduled. Tap to join the meeting."
+        }
+    elif message_type == "form_link":
+        return {
+            "title": "📝 Test Assigned!",
+            "body": "A new technical test has been assigned to you."
+        }
+    elif message_type == "status_update":
+        return {
+            "title": "📋 Status Update",
+            "body": "There's an update on your application status."
+        }
+    else:  # text or default
+        return {
+            "title": "💬 New Message",
+            "body": "You have received a new message from an employer."
+        }
+
+def get_job_status_notification_content(status: str, job_title: str):
+    """Get appropriate notification title and body based on job application status"""
+    if status == "accepted":
+        return {
+            "title": "🎉 Application Accepted!",
+            "body": f"Congratulations! Your application for {job_title} has been accepted."
+        }
+    elif status == "rejected":
+        return {
+            "title": "📋 Application Update",
+            "body": f"Your application for {job_title} has been reviewed."
+        }
+    elif status == "under_review":
+        return {
+            "title": "👀 Application Under Review",
+            "body": f"Your application for {job_title} is now under review."
+        }
+    elif status == "pending_requirements":
+        return {
+            "title": "📄 Requirements Pending",
+            "body": f"Additional requirements needed for your {job_title} application."
+        }
+    else:
+        return {
+            "title": "📋 Application Status Update",
+            "body": f"There's an update on your application for {job_title}."
+        }
+
+
 #Authentication Process
 
 # Signup and login for employee and employer
@@ -1936,8 +2038,244 @@ async def uploadResume(request: Request, file: UploadFile = File(...)):
             "Details": str(e)
         }
 
+#uplaod other required documents
+@app.post("/upload-sss")
+async def uploadSSS(request: Request, file: UploadFile = File(...)):
+    try:
+        # Validate file type
+        if not file.filename.lower().endswith('.jpg', '.jpeg', '.png'):
+            return {
+                "Status": "Error",
+                "Message": "Only JPG, JPEG, PNG files are allowed"
+            }
+
+        # Read file content
+        file_content = await file.read()
+        
+        # Validate file size (e.g., 5MB limit)
+        if len(file_content) > 5 * 1024 * 1024:  # 5MB in bytes
+            return {
+                "Status": "Error",
+                "Message": "File size exceeds 5MB limit"
+            }
+        
+        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        supabase = create_client(url, service_key)
+        
+        # Check if the user is an employee
+        check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
+        
+        if check_user.data and check_user.data["user_id"] == auth_userID:
+            try:
+                # Upload the document to the supabase storage with proper metadata
+                document_path = f"documents/{auth_userID}/{file.filename}"
+                supabase.storage.from_("documents").upload(
+                    document_path,
+
+                    file_content,
+                    {
+                        "content-type": "image/jpeg",
+                        "upsert": "true",
+                    },
+                )
+
+                # Update the employee's profile with the document URL
+                document_url = supabase.storage.from_("documents").get_public_url(document_path)
+                supabase.table("employee").update({"sss_url": document_url}).eq("user_id", auth_userID).execute()
+
+                return {
+                    "Status": "Success",
+                    "Message": "Document uploaded successfully",
+                    "DocumentURL": document_url
+                }
+            except Exception as storage_error:
+                return {
+                    "Status": "Error",
+                    "Message": "Failed to upload document to storage",
+                    "Details": str(storage_error)
+                }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "User not found or not authorized"
+            }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": str(e)
+        }
+
+@app.post("/upload-philhealth")
+async def uploadPhilhealth(request: Request, file: UploadFile = File(...)):
+    try:
+        # Validate file type
+        if not file.filename.lower().endswith('.jpg', '.jpeg', '.png'):
+            return {
+                "Status": "Error",
+                "Message": "Only JPG, JPEG, PNG files are allowed"
+            }
+
+        # Read file content
+        file_content = await file.read()
+        
+        # Validate file size (e.g., 5MB limit)
+        if len(file_content) > 5 * 1024 * 1024:  # 5MB in bytes
+            return {
+                "Status": "Error",
+                "Message": "File size exceeds 5MB limit"
+            }
+        
+        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        supabase = create_client(url, service_key)
+        
+        # Check if the user is an employee
+        check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
+        
+        if check_user.data and check_user.data["user_id"] == auth_userID:
+            try:
+                # Upload the document to the supabase storage with proper metadata
+                document_path = f"documents/{auth_userID}/{file.filename}"
+                supabase.storage.from_("documents").upload(
+                    document_path,
+                    file_content,
+                    {
+                        "content-type": "image/jpeg",
+                        "upsert": "true",
+                    },
+                )
+
+                # Update the employee's profile with the document URL
+                document_url = supabase.storage.from_("documents").get_public_url(document_path)
+                supabase.table("employee").update({"philhealth_url": document_url}).eq("user_id", auth_userID).execute()
+
+                return {
+                    "Status": "Success",
+                    "Message": "Document uploaded successfully",
+                    "DocumentURL": document_url
+                }
+            except Exception as storage_error:
+                return {
+                    "Status": "Error",
+                    "Message": "Failed to upload document to storage",
+                    "Details": str(storage_error)
+                }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "User not found or not authorized"
+            }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": str(e)
+        }
+
+@app.post("/upload-pagibig")
+async def uploadPagibig(request: Request, file: UploadFile = File(...)):
+    try:
+        # Validate file type
+        if not file.filename.lower().endswith('.jpg', '.jpeg', '.png'):
+            return {
+                "Status": "Error",
+                "Message": "Only JPG, JPEG, PNG files are allowed"
+            }
+
+        # Read file content
+        file_content = await file.read()
+        
+        # Validate file size (e.g., 5MB limit)
+        if len(file_content) > 5 * 1024 * 1024:  # 5MB in bytes
+            return {
+                "Status": "Error",
+                "Message": "File size exceeds 5MB limit"
+            }
+        
+        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        supabase = create_client(url, service_key)
+        
+        # Check if the user is an employee
+        check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
+        
+        if check_user.data and check_user.data["user_id"] == auth_userID:
+            try:
+                # Upload the document to the supabase storage with proper metadata
+                document_path = f"documents/{auth_userID}/{file.filename}"
+                supabase.storage.from_("documents").upload(
+                    document_path,
+                    file_content,
+                    {
+                        "content-type": "image/jpeg",
+                        "upsert": "true",
+                    },
+                )
+
+                # Update the employee's profile with the document URL
+                document_url = supabase.storage.from_("documents").get_public_url(document_path)
+                supabase.table("employee").update({"pagibig_url": document_url}).eq("user_id", auth_userID).execute()
+
+                return {
+                    "Status": "Success",
+                    "Message": "Document uploaded successfully",
+                    "DocumentURL": document_url
+                }
+            except Exception as storage_error:
+                return {
+                    "Status": "Error",
+                    "Message": "Failed to upload document to storage",
+                    "Details": str(storage_error)
+                }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "User not found or not authorized"
+            }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": str(e)
+        }
+
+@app.get("/get-documents")
+async def getDocuments(request: Request):
+    try:
+        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        supabase = create_client(url, service_key)
+        
+        
+        check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
+        
+        if check_user.data and check_user.data["user_id"] == auth_userID:
+            documents = supabase.table("employee").select("sss_url, philhealth_url, pagibig_url").eq("user_id", auth_userID).single().execute()
+            
+            
+            if documents.data:
+                return {
+                    "Status": "Success",
+                    "Message": "Documents fetched successfully",
+                    "Documents": documents.data
+                }
+            else:
+                return {
+                    "Status": "Error",
+                    "Message": "No documents found"
+                }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "User not found or not authorized"
+            }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": str(e)
+        }
+
 # 15/06/2025 - Michael the great
-# Currently working on the three endpoinst
+# Currently working on the three endpoinst  
 # for the applciation ststus, see hsitory of application, and
 # view applciants
 #
@@ -1983,6 +2321,9 @@ async def updateApplicationStatus(request : Request, application_id: str, new_st
             elif new_status == "under_review":
                 category = "job_application_sent"
                 content = f"Your application at {job_title.data['title']} is under review"
+            elif new_status == "pending_requirements":
+                category = "job_application_pending_requirements"
+                content = f"Your application at {job_title.data['title']} is pending requirements"
             else:
                 category = "job_application_sent"
                 content = f"Your application at {job_title.data['title']} is sent"
@@ -1995,6 +2336,41 @@ async def updateApplicationStatus(request : Request, application_id: str, new_st
                 # print(f"  category: {category}")
                 # #
                 await sendNotification(user_id, receiver_id.data["user_id"], content, category)
+                
+                # Send push notification to the applicant (async, don't wait for it)
+                async def send_status_push_notification():
+                    try:
+                        # Get applicant's push token
+                        applicant_user_id = receiver_id.data["user_id"]
+                        push_token = await get_user_push_token(applicant_user_id)
+                        
+                        if push_token:
+                            # Get appropriate notification content based on status
+                            notification_content = get_job_status_notification_content(new_status, job_title.data['title'])
+                            
+                            # Send push notification
+                            await send_push_notification(
+                                expo_token=push_token,
+                                title=notification_content["title"],
+                                body=notification_content["body"],
+                                data={
+                                    "type": "job_application_status",
+                                    "status": new_status,
+                                    "job_title": job_title.data['title'],
+                                    "application_id": application_id,
+                                    "timestamp": datetime.now().isoformat()
+                                }
+                            )
+                            print(f"✅ Push notification sent for job status change: {new_status}")
+                        else:
+                            print(f"⚠️ No push token found for user {applicant_user_id}")
+                            
+                    except Exception as e:
+                        print(f"❌ Error sending push notification for job status: {str(e)}")
+                
+                # Start push notification task in background (don't block the response)
+                asyncio.create_task(send_status_push_notification())
+                
             except Exception as e:
                 # print(f"DEBUG - sendNotification error: {e}") #
                 return {
@@ -2454,77 +2830,6 @@ async def get_chat_history(sender_id: str, reciever_id: str, job_id: str = None)
 
 # ======== Push Notification Functions ========
 
-async def get_user_push_token(user_id: str) -> str:
-    """Get the active push token for a user from the database"""
-    try:
-        supabase = create_client(url, service_key)
-        response = supabase.table("push_tokens").select("expo_token").eq("user_id", user_id).eq("active", True).execute()
-        
-        if response.data and len(response.data) > 0:
-            return response.data[0]["expo_token"]
-        return None
-    except Exception as e:
-        print(f"❌ Error getting push token for user {user_id}: {str(e)}")
-        return None
-
-async def send_push_notification(expo_token: str, title: str, body: str, data: dict = None):
-    """Send push notification via Expo Push API"""
-    try:
-        notification_payload = {
-            "to": expo_token,
-            "title": title,
-            "body": body,
-            "sound": "default",
-            "priority": "high"
-        }
-        
-        if data:
-            notification_payload["data"] = data
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://exp.host/--/api/v2/push/send",
-                json=notification_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                }
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                print(f"✅ Push notification sent successfully: {result}")
-                return result
-            else:
-                print(f"❌ Failed to send push notification: {response.status_code} - {response.text}")
-                return None
-                
-    except Exception as e:
-        print(f"❌ Error sending push notification: {str(e)}")
-        return None
-
-def get_notification_content(message_type: str):
-    """Get appropriate notification title and body based on message type"""
-    if message_type == "google_meet_link":
-        return {
-            "title": "🎥 Interview Scheduled!",
-            "body": "You have a new interview scheduled. Tap to join the meeting."
-        }
-    elif message_type == "form_link":
-        return {
-            "title": "📝 Test Assigned!",
-            "body": "A new technical test has been assigned to you."
-        }
-    elif message_type == "status_update":
-        return {
-            "title": "📋 Status Update",
-            "body": "There's an update on your application status."
-        }
-    else:  # text or default
-        return {
-            "title": "💬 New Message",
-            "body": "You have received a new message from an employer."
-        }
 
 @app.post("/message/send-message") # send message to a user
 async def send_message(payload: ChatMessage, request: Request):
