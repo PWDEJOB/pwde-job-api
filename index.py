@@ -2059,6 +2059,15 @@ async def uploadSSS(request: Request, file: UploadFile = File(...)):
                 "Message": "File size exceeds 5MB limit"
             }
         
+        # Determine content type based on file extension
+        filename_lower = file.filename.lower()
+        if filename_lower.endswith(('.jpg', '.jpeg')):
+            content_type = "image/jpeg"
+        elif filename_lower.endswith('.png'):
+            content_type = "image/png"
+        else:
+            content_type = "image/jpeg"  # default fallback
+        
         auth_userID = await getAuthUserIdFromRequest(redis, request)
         supabase = create_client(url, service_key)
         
@@ -2071,10 +2080,9 @@ async def uploadSSS(request: Request, file: UploadFile = File(...)):
                 document_path = f"documents/sss/{auth_userID}/{file.filename}"
                 supabase.storage.from_("documents").upload(
                     document_path,
-
                     file_content,
                     {
-                        "content-type": "image/jpeg",
+                        "content-type": content_type,
                         "upsert": "true",
                     },
                 )
@@ -2126,6 +2134,15 @@ async def uploadPhilhealth(request: Request, file: UploadFile = File(...)):
                 "Message": "File size exceeds 5MB limit"
             }
         
+        # Determine content type based on file extension
+        filename_lower = file.filename.lower()
+        if filename_lower.endswith(('.jpg', '.jpeg')):
+            content_type = "image/jpeg"
+        elif filename_lower.endswith('.png'):
+            content_type = "image/png"
+        else:
+            content_type = "image/jpeg"  # default fallback
+        
         auth_userID = await getAuthUserIdFromRequest(redis, request)
         supabase = create_client(url, service_key)
         
@@ -2140,7 +2157,7 @@ async def uploadPhilhealth(request: Request, file: UploadFile = File(...)):
                     document_path,
                     file_content,
                     {
-                        "content-type": "image/jpeg",
+                        "content-type": content_type,
                         "upsert": "true",
                     },
                 )
@@ -2192,6 +2209,15 @@ async def uploadPagibig(request: Request, file: UploadFile = File(...)):
                 "Message": "File size exceeds 5MB limit"
             }
         
+        # Determine content type based on file extension
+        filename_lower = file.filename.lower()
+        if filename_lower.endswith(('.jpg', '.jpeg')):
+            content_type = "image/jpeg"
+        elif filename_lower.endswith('.png'):
+            content_type = "image/png"
+        else:
+            content_type = "image/jpeg"  # default fallback
+        
         auth_userID = await getAuthUserIdFromRequest(redis, request)
         supabase = create_client(url, service_key)
         
@@ -2206,7 +2232,7 @@ async def uploadPagibig(request: Request, file: UploadFile = File(...)):
                     document_path,
                     file_content,
                     {
-                        "content-type": "image/jpeg",
+                        "content-type": content_type,
                         "upsert": "true",
                     },
                 )
