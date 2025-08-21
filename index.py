@@ -2068,7 +2068,7 @@ async def uploadSSS(request: Request, file: UploadFile = File(...)):
         if check_user.data and check_user.data["user_id"] == auth_userID:
             try:
                 # Upload the document to the supabase storage with proper metadata
-                document_path = f"documents/{auth_userID}/{file.filename}"
+                document_path = f"documents/sss/{auth_userID}/{file.filename}"
                 supabase.storage.from_("documents").upload(
                     document_path,
 
@@ -2135,7 +2135,7 @@ async def uploadPhilhealth(request: Request, file: UploadFile = File(...)):
         if check_user.data and check_user.data["user_id"] == auth_userID:
             try:
                 # Upload the document to the supabase storage with proper metadata
-                document_path = f"documents/{auth_userID}/{file.filename}"
+                document_path = f"documents/philhealth/{auth_userID}/{file.filename}"
                 supabase.storage.from_("documents").upload(
                     document_path,
                     file_content,
@@ -2201,7 +2201,7 @@ async def uploadPagibig(request: Request, file: UploadFile = File(...)):
         if check_user.data and check_user.data["user_id"] == auth_userID:
             try:
                 # Upload the document to the supabase storage with proper metadata
-                document_path = f"documents/{auth_userID}/{file.filename}"
+                document_path = f"documents/pagibig/{auth_userID}/{file.filename}"
                 supabase.storage.from_("documents").upload(
                     document_path,
                     file_content,
