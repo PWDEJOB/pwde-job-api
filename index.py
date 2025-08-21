@@ -2239,33 +2239,51 @@ async def uploadPagibig(request: Request, file: UploadFile = File(...)):
         }
 
 @app.get("/get-documents")
-async def getDocuments(request: Request):
+async def getDocuments(request: Request, user_id: str = None):
     try:
         auth_userID = await getAuthUserIdFromRequest(redis, request)
         supabase = create_client(url, service_key)
         
-        
-        check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
-        
-        if check_user.data and check_user.data["user_id"] == auth_userID:
-            documents = supabase.table("employee").select("sss_url, philhealth_url, pagibig_url").eq("user_id", auth_userID).single().execute()
-            
-            
-            if documents.data:
-                return {
-                    "Status": "Success",
-                    "Message": "Documents fetched successfully",
-                    "Documents": documents.data
-                }
+        # If user_id is provided, check if requester is an employer
+        if user_id:
+            check_employer = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
+            if check_employer.data and check_employer.data["user_id"] == auth_userID:
+                # Employer can view documents for specified user
+                target_user_id = user_id
             else:
                 return {
                     "Status": "Error",
-                    "Message": "No documents found"
+                    "Message": "Access denied. Only employers can view other users' documents."
                 }
         else:
+            # No user_id provided, check if requester is an employee viewing their own documents
+            check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
+            if check_user.data and check_user.data["user_id"] == auth_userID:
+                target_user_id = auth_userID
+            else:
+                return {
+                    "Status": "Error",
+                    "Message": "User not found or not authorized"
+                }
+        
+        # Fetch documents for the target user
+        documents = supabase.table("employee").select("sss_url, philhealth_url, pagibig_url").eq("user_id", target_user_id).single().execute()
+        
+        if documents.data:
             return {
-                "Status": "Error",
-                "Message": "User not found or not authorized"
+                "Status": "Success",
+                "Message": "Documents fetched successfully",
+                "Documents": documents.data
+            }
+        else:
+            return {
+                "Status": "Success",
+                "Message": "No documents found for this user",
+                "Documents": {
+                    "sss_url": None,
+                    "philhealth_url": None,
+                    "pagibig_url": None
+                }
             }
     except Exception as e:
         return {
@@ -2401,6 +2419,7 @@ async def updateApplicationStatus(request : Request, application_id: str, new_st
             "Message": "Inetrnal Error",
             "Details": f"{e}"
         }
+
 
 @app.get("/my-applications")
 async def viewApplicationHistory(request: Request):
