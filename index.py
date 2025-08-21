@@ -2042,8 +2042,11 @@ async def uploadResume(request: Request, file: UploadFile = File(...)):
 @app.post("/upload-sss")
 async def uploadSSS(request: Request, file: UploadFile = File(...)):
     try:
+        # Debug logging
+        print(f"🔍 SSS Upload Debug - Filename: {file.filename}, Content-Type: {file.content_type}")
+        
         # Validate file type
-        if not file.filename.lower().endswith('.jpg', '.jpeg', '.png'):
+        if not file.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
             return {
                 "Status": "Error",
                 "Message": "Only JPG, JPEG, PNG files are allowed"
@@ -2069,27 +2072,64 @@ async def uploadSSS(request: Request, file: UploadFile = File(...)):
             content_type = "image/jpeg"  # default fallback
         
         auth_userID = await getAuthUserIdFromRequest(redis, request)
+        print(f"🔍 Auth User ID: {auth_userID}")
+        
         supabase = create_client(url, service_key)
+        
+        # Check if documents bucket exists
+        try:
+            buckets = supabase.storage.list_buckets()
+            print(f"🔍 Available buckets: {[bucket.name for bucket in buckets]}")
+            documents_bucket_exists = any(bucket.name == "documents" for bucket in buckets)
+            print(f"🔍 Documents bucket exists: {documents_bucket_exists}")
+        except Exception as bucket_error:
+            print(f"⚠️ Error checking buckets: {str(bucket_error)}")
         
         # Check if the user is an employee
         check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
+        print(f"🔍 User check result: {check_user.data}")
         
         if check_user.data and check_user.data["user_id"] == auth_userID:
             try:
                 # Upload the document to the supabase storage with proper metadata
                 document_path = f"documents/sss/{auth_userID}/{file.filename}"
-                supabase.storage.from_("documents").upload(
-                    document_path,
-                    file_content,
-                    {
-                        "content-type": content_type,
-                        "upsert": "true",
-                    },
-                )
+                print(f"🔍 Attempting upload to path: {document_path}")
+                print(f"🔍 File size: {len(file_content)} bytes")
+                print(f"🔍 Content type: {content_type}")
+                
+                # Try upload with upsert first, if it fails try without upsert
+                try:
+                    upload_result = supabase.storage.from_("documents").upload(
+                        document_path,
+                        file_content,
+                        {
+                            "content-type": content_type,
+                            "upsert": True,  # Use boolean instead of string
+                        },
+                    )
+                except Exception as upsert_error:
+                    print(f"⚠️ Upload with upsert failed, trying without upsert: {str(upsert_error)}")
+                    # Try removing existing file first, then upload
+                    try:
+                        supabase.storage.from_("documents").remove([document_path])
+                    except:
+                        pass  # File might not exist, that's fine
+                    
+                    upload_result = supabase.storage.from_("documents").upload(
+                        document_path,
+                        file_content,
+                        {
+                            "content-type": content_type,
+                        },
+                    )
+                print(f"🔍 Upload result: {upload_result}")
 
                 # Update the employee's profile with the document URL
                 document_url = supabase.storage.from_("documents").get_public_url(document_path)
-                supabase.table("employee").update({"sss_url": document_url}).eq("user_id", auth_userID).execute()
+                print(f"🔍 Generated URL: {document_url}")
+                
+                update_result = supabase.table("employee").update({"sss_url": document_url}).eq("user_id", auth_userID).execute()
+                print(f"🔍 Database update result: {update_result}")
 
                 return {
                     "Status": "Success",
@@ -2097,6 +2137,8 @@ async def uploadSSS(request: Request, file: UploadFile = File(...)):
                     "DocumentURL": document_url
                 }
             except Exception as storage_error:
+                print(f"💥 Storage error: {str(storage_error)}")
+                print(f"💥 Storage error type: {type(storage_error)}")
                 return {
                     "Status": "Error",
                     "Message": "Failed to upload document to storage",
@@ -2111,6 +2153,45 @@ async def uploadSSS(request: Request, file: UploadFile = File(...)):
         return {
             "Status": "Error",
             "Message": "Internal Server Error",
+            "Details": str(e)
+        }
+
+@app.get("/test-storage")
+async def testStorage():
+    """Test endpoint to check Supabase storage connectivity"""
+    try:
+        supabase = create_client(url, service_key)
+        
+        # List available buckets
+        buckets = supabase.storage.list_buckets()
+        bucket_names = [bucket.name for bucket in buckets]
+        
+        # Check if documents bucket exists
+        documents_exists = "documents" in bucket_names
+        
+        # If documents bucket doesn't exist, try to create it
+        if not documents_exists:
+            try:
+                create_result = supabase.storage.create_bucket("documents", {"public": True})
+                print(f"🔧 Created documents bucket: {create_result}")
+                documents_exists = True
+            except Exception as create_error:
+                print(f"⚠️ Failed to create documents bucket: {str(create_error)}")
+        
+        return {
+            "Status": "Success",
+            "Message": "Storage connectivity test completed",
+            "Data": {
+                "buckets": bucket_names,
+                "documents_bucket_exists": documents_exists,
+                "service_key_configured": bool(service_key),
+                "url_configured": bool(url)
+            }
+        }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Storage test failed",
             "Details": str(e)
         }
 
