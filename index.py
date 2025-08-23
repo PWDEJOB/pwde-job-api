@@ -282,7 +282,7 @@ def get_job_status_notification_content(status: str, job_title: str):
     elif status == "rejected":
         return {
             "title": "📋 Application Update",
-            "body": f"Your application for {job_title} has been reviewed."
+            "body": f"Your application for {job_title} has been rejected."
         }
     elif status == "under_review":
         return {
