@@ -3200,6 +3200,67 @@ async def test_push_notification(user_id: str):
             "Message": f"Error sending test notification: {str(e)}"
         }
 
+@app.post("/register-push-token")
+async def register_push_token(request: Request):
+    """Register/update a user's push notification token"""
+    try:
+        # Get user ID from token
+        user_id = await getAuthUserIdFromRequest(redis, request)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
+        
+        # Parse request body
+        body = await request.json()
+        expo_token = body.get('expo_token')
+        
+        if not expo_token:
+            return {
+                "Status": "Error",
+                "Message": "expo_token is required"
+            }
+        
+        # Create Supabase client
+        supabase = create_client(url, service_key)
+        
+        # First, deactivate any existing tokens for this user
+        supabase.table("push_tokens").update({
+            "active": False
+        }).eq("user_id", user_id).execute()
+        
+        # Insert or update the new token
+        result = supabase.table("push_tokens").upsert({
+            "user_id": user_id,
+            "expo_token": expo_token,
+            "active": True,
+            "created_at": datetime.now().isoformat()
+        }, on_conflict="expo_token").execute()
+        
+        if result.data:
+            print(f"✅ Push token registered for user {user_id}: {expo_token[:20]}...")
+            return {
+                "Status": "Success",
+                "Message": "Push token registered successfully",
+                "data": {
+                    "user_id": user_id,
+                    "token_registered": True
+                }
+            }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "Failed to register push token"
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error registering push token: {str(e)}")
+        return {
+            "Status": "Error",
+            "Message": f"Error registering push token: {str(e)}"
+        }
+
 # marking messages as read
 @app.patch("/message/mark-as-read/{message_id}")
 async def mark_message_as_read(message_id: str, request: Request):
