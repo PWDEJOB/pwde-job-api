@@ -1393,30 +1393,75 @@ async def deleteJob(request: Request, id: str):
         auth_userID = await getAuthUserIdFromRequest(redis, request)
         supabase = create_client(url, service_key)
 
-        # Check if the user is an employer
+        # First check if the user is an employer and authorized to delete this job
         search_id = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
-
-        if search_id.data and search_id.data["user_id"] == auth_userID:
-            #delete the job
-            delete_job = supabase.table("jobs").delete().eq("id", id).execute()
-            # print(delete_job)
-            
-            if delete_job.data:  # check if any row was actually deleted
-                return {
-                    "Status": "Success",
-                    "Message": f"Job {id} deleted successfully"
-                }
-            else:
-                return {
-                    "Status": "Error",
-                    "Message": f"No job found with id {id} to delete.",
-                    "Details": f"{delete_job}"
-                }
-        else:
+        
+        if not search_id.data or search_id.data["user_id"] != auth_userID:
             return {
                 "Status": "Error",
                 "Message": "Employer not found or not authorized."
             }
+
+        # Check if the job exists before deletion
+        job_check = supabase.table("jobs").select("id").eq("id", id).single().execute()
+        if not job_check.data:
+            return {
+                "Status": "Error",
+                "Message": f"No job found with id {id} to delete."
+            }
+
+        # Delete employee history related to the job
+        try:
+            deleting_employee_history = supabase.table("employee_history").delete().eq("job_id", id).execute()
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Error deleting employee history",
+                "Details": f"{e}"
+            }
+
+        # Delete job applications related to the job
+        try:
+            deleting_job_applications = supabase.table("job_applications").delete().eq("job_id", id).execute()
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Error deleting job applications",
+                "Details": f"{e}"
+            }
+
+        # Delete messages related to the job
+        try:
+            deleting_messages_between_employer_and_applicant = supabase.table("messages").delete().eq("job_id", id).execute()
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Error deleting messages between employer and applicant",
+                "Details": f"{e}"
+            }
+
+        # Finally delete the job itself
+        try:
+            delete_job = supabase.table("jobs").delete().eq("id", id).execute()
+            
+            if delete_job.data:  # check if any row was actually deleted
+                return {
+                    "Status": "Success",
+                    "Message": f"Job {id} and all related data deleted successfully"
+                }
+            else:
+                return {
+                    "Status": "Error",
+                    "Message": f"Failed to delete job {id}",
+                    "Details": f"{delete_job}"
+                }
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Error deleting job",
+                "Details": f"{e}"
+            }
+
     except Exception as e:
         return {
             "Status": "Error",
