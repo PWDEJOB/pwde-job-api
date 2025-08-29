@@ -3694,7 +3694,7 @@ async def get_job_application_analysis(user_id: str, request: Request):
     
     try:
         # Get job application analysis data
-        response = supabase.table("job_application_analysis_data").select("*").eq("user_id", user_id).execute()
+        response = supabase.table("job_application_analysis_data").select("*").eq("userid_of_employer", user_id).execute()
     except Exception as e:
         return {
             "Status": "Error",
