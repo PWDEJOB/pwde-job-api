@@ -1657,6 +1657,63 @@ async def applyingForJob(job_id: str, request: Request):
                 
                 insert_job_appliead = supabase_job_data_insertion.table("job_applications").insert(job_data).execute()
 
+                try:
+                    #get the job data for insert in "job application analysis data"
+                    get_job_data = supabase.table("jobs").select("*").eq("id", job_id).single().execute()
+
+                    #get all job appliead skills
+                    skill_1 = get_job_data.data["skill_1"]
+                    skill_2 = get_job_data.data["skill_2"]
+                    skill_3 = get_job_data.data["skill_3"]
+                    skill_4 = get_job_data.data["skill_4"]
+                    skill_5 = get_job_data.data["skill_5"]
+
+                    #get salary 
+                    min_salary = get_job_data.data["min_salary"]
+                    max_salary = get_job_data.data["max_salary"]
+
+                    #get the job type
+                    job_type = get_job_data.data["job_type"]
+                    userid_of_employer = get_job_data.data["user_id"]
+
+                    #calculate what month the user applied for th job
+                    month = datetime.now().month
+
+                    #calculate what year the user applied for the job
+                    year = datetime.now().year
+                    
+                    # structure the data for insert in "job application analysis data"
+                    job_application_analysis_data = {
+                        "user_id": userid_of_employer,
+                        "skill_1": skill_1,
+                        "skill_2": skill_2,
+                        "skill_3": skill_3,
+                        "skill_4": skill_4,
+                        "skill_5": skill_5,
+                        "min_salary": min_salary,
+                        "max_salary": max_salary,
+                        "job_type": job_type,
+                        "userid_of_employer": userid_of_employer,
+                        "month": month,
+                        "year": year
+                    }
+                
+
+                    #insert the data in "job application analysis data"
+                    insert_job_application_analysis_data = supabase.table("job_application_analysis_data").insert(job_application_analysis_data).execute()
+
+                    if insert_job_application_analysis_data.data:
+                        return {
+                            "Status": "Success",
+                            "Message": "Job application analysis data inserted successfully"
+                        }
+                except Exception as e:
+                    return {
+                        "Status": "Error",
+                        "Message": "Error inserting job application analysis data",
+                        "Details": f"{e}"
+                    }
+                    
                 #send notification to the employer
                 user_id = auth_userID
                 category = "new_applicant"
@@ -3622,4 +3679,37 @@ async def delete_notification(notification_id: str, request: Request):
         return {
             "Status": "Error",
             "Message": "Notification not found"
+        }
+
+@app.get("/job-application-analysis/{user_id}")
+async def get_job_application_analysis(user_id: str, request: Request):
+    try:
+        supabase = create_client(url, service_key)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    try:
+        # Get job application analysis data
+        response = supabase.table("job_application_analysis_data").select("*").eq("user_id", user_id).execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    if response.data:
+        return {
+            "Status": "Success",
+            "Message": "Job application analysis data fetched successfully",
+            "data": response.data
+        }
+    else:
+        return {
+            "Status": "Error",
+            "Message": "No job application analysis data found"
         }
