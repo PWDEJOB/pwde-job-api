@@ -1684,7 +1684,6 @@ async def applyingForJob(job_id: str, request: Request):
                     
                     # structure the data for insert in "job application analysis data"
                     job_application_analysis_data = {
-                        "user_id": userid_of_employer,
                         "skill_1": skill_1,
                         "skill_2": skill_2,
                         "skill_3": skill_3,
