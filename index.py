@@ -1676,7 +1676,7 @@ async def applyingForJob(job_id: str, request: Request):
                     userid_of_employer = get_job_data.data["user_id"]
 
                     #calculate what month the user applied for th job
-                    month = datetime.now().month
+                    month = str(datetime.now().month)
 
                     #calculate what year the user applied for the job
                     year = datetime.now().year
@@ -3336,15 +3336,15 @@ async def register_push_token(request: Request):
         # Create Supabase client
         supabase = create_client(url, service_key)
         
-        print(f"🔔 Registering push token for user: {user_id}")
-        print(f"🔔 Token: {expo_token[:30]}...")
+        # print(f"🔔 Registering push token for user: {user_id}")
+        # print(f"🔔 Token: {expo_token[:30]}...")
         
         # First, deactivate any existing tokens for this user
         deactivate_result = supabase.table("push_tokens").update({
             "active": False
         }).eq("user_id", user_id).execute()
         
-        print(f"🔔 Deactivated {len(deactivate_result.data) if deactivate_result.data else 0} existing tokens")
+        # print(f"🔔 Deactivated {len(deactivate_result.data) if deactivate_result.data else 0} existing tokens")
         
         # Insert or update the new token
         result = supabase.table("push_tokens").upsert({
