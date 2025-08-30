@@ -1697,35 +1697,36 @@ async def applyingForJob(job_id: str, request: Request):
                     }
                 
                     # Debug logging
-                    print("=== DEBUG: Job Application Analysis Data ===")
-                    print(f"Data to insert: {job_application_analysis_data}")
-                    print(f"Data types:")
-                    print(f"  skill_1: {type(skill_1)} = {skill_1}")
-                    print(f"  skill_2: {type(skill_2)} = {skill_2}")
-                    print(f"  skill_3: {type(skill_3)} = {skill_3}")
-                    print(f"  skill_4: {type(skill_4)} = {skill_4}")
-                    print(f"  skill_5: {type(skill_5)} = {skill_5}")
-                    print(f"  min_salary: {type(min_salary)} = {min_salary}")
-                    print(f"  max_salary: {type(max_salary)} = {max_salary}")
-                    print(f"  job_type: {type(job_type)} = {job_type}")
-                    print(f"  userid_of_employer: {type(userid_of_employer)} = {userid_of_employer}")
-                    print(f"  month: {type(month)} = {month}")
-                    print(f"  year: {type(year)} = {year}")
-                    print("=== END DEBUG ===")
+                    # print("=== DEBUG: Job Application Analysis Data ===")
+                    # print(f"Data to insert: {job_application_analysis_data}")
+                    # print(f"Data types:")
+                    # print(f"  skill_1: {type(skill_1)} = {skill_1}")
+                    # print(f"  skill_2: {type(skill_2)} = {skill_2}")
+                    # print(f"  skill_3: {type(skill_3)} = {skill_3}")
+                    # print(f"  skill_4: {type(skill_4)} = {skill_4}")
+                    # print(f"  skill_5: {type(skill_5)} = {skill_5}")
+                    # print(f"  min_salary: {type(min_salary)} = {min_salary}")
+                    # print(f"  max_salary: {type(max_salary)} = {max_salary}")
+                    # print(f"  job_type: {type(job_type)} = {job_type}")
+                    # print(f"  userid_of_employer: {type(userid_of_employer)} = {userid_of_employer}")
+                    # print(f"  month: {type(month)} = {month}")
+                    # print(f"  year: {type(year)} = {year}")
+                    # print("=== END DEBUG ===")
 
                     #insert the data in "job application analysis data"
                     insert_job_application_analysis_data = supabase.table("job_application_analysis_data").insert(job_application_analysis_data).execute()
 
                     if insert_job_application_analysis_data.data:
-                        print("Job application analysis data inserted successfully")
-                    else:
-                        print("Warning: Job application analysis data insertion returned no data")
+                        return {
+                            "Status": "Success",
+                            "Message": "Job application analysis data inserted successfully"
+                        }
                 except Exception as e:
-                    print(f"=== ERROR: Job Application Analysis Data Insertion Failed ===")
-                    print(f"Error type: {type(e)}")
-                    print(f"Error message: {str(e)}")
-                    print(f"Error details: {e}")
-                    print("=== END ERROR ===")
+                    # print(f"=== ERROR: Job Application Analysis Data Insertion Failed ===")
+                    # print(f"Error type: {type(e)}")
+                    # print(f"Error message: {str(e)}")
+                    # print(f"Error details: {e}")
+                    # print("=== END ERROR ===")
                     return {
                         "Status": "Error",
                         "Message": "Error inserting job application analysis data",
