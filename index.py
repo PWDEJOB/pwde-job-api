@@ -3304,15 +3304,21 @@ async def test_push_notification(user_id: str):
 async def register_push_token(request: Request):
     """Register/update a user's push notification token"""
     try:
-        # Get user ID from token
-        user_id = await getAuthUserIdFromRequest(redis, request)
-        if not user_id:
+        # Verify authentication first
+        auth_user_id = await getAuthUserIdFromRequest(redis, request)
+        if not auth_user_id:
             raise HTTPException(status_code=401, detail="Authentication required")
-        
         
         # Parse request body
         body = await request.json()
+        user_id = body.get('user_id')  # Use user_id from request body
         expo_token = body.get('expo_token')
+        
+        if not user_id:
+            return {
+                "Status": "Error",
+                "Message": "user_id is required"
+            }
         
         if not expo_token:
             return {
@@ -3320,13 +3326,25 @@ async def register_push_token(request: Request):
                 "Message": "expo_token is required"
             }
         
+        # Verify that the authenticated user matches the user_id in request
+        if auth_user_id != user_id:
+            return {
+                "Status": "Error",
+                "Message": "User ID mismatch - you can only register tokens for your own account"
+            }
+        
         # Create Supabase client
         supabase = create_client(url, service_key)
         
+        print(f"🔔 Registering push token for user: {user_id}")
+        print(f"🔔 Token: {expo_token[:30]}...")
+        
         # First, deactivate any existing tokens for this user
-        supabase.table("push_tokens").update({
+        deactivate_result = supabase.table("push_tokens").update({
             "active": False
         }).eq("user_id", user_id).execute()
+        
+        print(f"🔔 Deactivated {len(deactivate_result.data) if deactivate_result.data else 0} existing tokens")
         
         # Insert or update the new token
         result = supabase.table("push_tokens").upsert({
