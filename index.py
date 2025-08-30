@@ -22,6 +22,7 @@ app.add_middleware(
 
 import os
 from supabase import create_client, Client
+from groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -299,8 +300,6 @@ def get_job_status_notification_content(status: str, job_title: str):
             "title": "📋 Application Status Update",
             "body": f"There's an update on your application for {job_title}."
         }
-
-
 #Authentication Process
 
 # Signup and login for employee and employer
@@ -3711,4 +3710,206 @@ async def get_job_application_analysis(user_id: str, request: Request):
         return {
             "Status": "Error",
             "Message": "No job application analysis data found"
+        }
+
+
+# verification of the pwd id image
+@app.post("/verify-pwd-id/{user_id}")
+async def verify_pwd_id(user_id: str):
+    # Input validation
+    if not user_id or not user_id.strip():
+        return {
+            "Status": "Error",
+            "Message": "User ID is required"
+        }
+    
+    try:
+        supabase = create_client(url, service_key)
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Database connection failed",
+            "Details": f"{e}"
+        }
+    
+    try:
+        # Fetch user data
+        response = supabase.table("employee").select("*").eq("user_id", user_id).execute()
+
+        if not response.data:
+            return {
+                "Status": "Error", 
+                "Message": "User not found"
+            }
+
+        user_data = response.data[0]
+        pwde_id_front = user_data.get("pwd_id_front_url")
+        
+        if not pwde_id_front:
+            return {
+                "Status": "Error",
+                "Message": "PWD ID image not found for this user"
+            }
+
+        try:
+            # Initialize Groq client
+            client = Groq()
+
+            # Call Groq API for image analysis
+            groq_response = client.chat.completions.create(
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "You are a PWD ID verification system. Analyze this PWD (Person with Disability) identification card image and extract ONLY the PWD ID number and the person's name.\n\nIMPORTANT: You must respond in EXACTLY this format with nothing else:\nPWD ID Number: [number], Name: [full name]\n\nIf you cannot find both the PWD ID number and name clearly in the image, respond with EXACTLY:\nNo number or name found in the image.\n\nDo not include any explanations, descriptions, or additional text. Only the required format."
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"{pwde_id_front}"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            )
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Image analysis failed",
+                "Details": f"Groq API error: {e}"
+            }
+
+        # Check if Groq response is valid
+        if not groq_response or not groq_response.choices or not groq_response.choices[0].message.content:
+            return {
+                "Status": "Error",
+                "Message": "Invalid response from image analysis service"
+            }
+
+        analysis_result = groq_response.choices[0].message.content.strip()
+
+        # Always return the full Groq response for debugging
+        debug_info = {
+            "full_groq_response": analysis_result,
+            "expected_format": "PWD ID Number: [number], Name: [full name]"
+        }
+
+        if analysis_result == "No number or name found in the image.":
+            return {
+                "Status": "Error",
+                "Message": "No PWD ID number or name found in the image",
+                "Details": debug_info
+            }
+        
+        # Parse the response safely
+        try:
+            if "," not in analysis_result or ":" not in analysis_result:
+                return {
+                    "Status": "Error",
+                    "Message": "Invalid format in image analysis response",
+                    "Details": {
+                        **debug_info,
+                        "error": "Expected comma and colon separators not found"
+                    }
+                }
+            
+            parsed_response = analysis_result.split(",")
+            if len(parsed_response) < 2:
+                return {
+                    "Status": "Error",
+                    "Message": "Incomplete data extracted from image",
+                    "Details": {
+                        **debug_info,
+                        "error": "Could not parse both PWD ID and name - missing comma separator"
+                    }
+                }
+            
+            # Extract PWD ID number
+            pwd_id_part = parsed_response[0].strip()
+            if ":" not in pwd_id_part:
+                return {
+                    "Status": "Error",
+                    "Message": "PWD ID number format invalid",
+                    "Details": {
+                        **debug_info,
+                        "error": f"Expected 'PWD ID Number: ...' but got: '{pwd_id_part}'"
+                    }
+                }
+            pwd_id_number = pwd_id_part.split(":", 1)[1].strip()
+            
+            # Extract name
+            name_part = parsed_response[1].strip()
+            if ":" not in name_part:
+                return {
+                    "Status": "Error",
+                    "Message": "Name format invalid",
+                    "Details": {
+                        **debug_info,
+                        "error": f"Expected 'Name: ...' but got: '{name_part}'"
+                    }
+                }
+            name = name_part.split(":", 1)[1].strip()
+            
+            if not pwd_id_number or not name:
+                return {
+                    "Status": "Error",
+                    "Message": "Empty PWD ID number or name extracted from image",
+                    "Details": {
+                        **debug_info,
+                        "extracted_pwd_id": pwd_id_number,
+                        "extracted_name": name
+                    }
+                }
+                
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Failed to parse image analysis results",
+                "Details": {
+                    **debug_info,
+                    "parsing_error": str(e)
+                }
+            }
+
+        # Verify against pwd_people table
+        try:
+            verification_response = supabase.table("pwd_people").select("*").eq("pwd_number", pwd_id_number).eq("id_owner_name", name).execute()
+            
+            if verification_response.data:
+
+                #update the employee "is_verified" to true
+                supabase.table("employee").update({"is_verified": True}).eq("user_id", user_id).execute()
+
+                return {
+                    "Status": "Success",
+                    "Message": "PWD ID verification successful",
+                    "Details": {
+                        "extracted_pwd_id": pwd_id_number,
+                        "extracted_name": name,
+                        "verification_data": verification_response.data[0]
+                    }
+                }
+            else:
+                return {
+                    "Status": "Error",
+                    "Message": "PWD ID verification failed - no matching record found",
+                    "Details": f"No record found for PWD ID: {pwd_id_number}, Name: {name}"
+                }
+                
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Database verification failed",
+                "Details": f"Error checking pwd_people table: {e}"
+            }
+            
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "PWD ID verification process failed",
+            "Details": f"Unexpected error: {e}"
         }
