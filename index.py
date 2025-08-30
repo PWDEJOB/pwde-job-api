@@ -1718,7 +1718,7 @@ async def applyingForJob(job_id: str, request: Request):
 
                     if insert_job_application_analysis_data.data:
                         return {
-                            "Status": "Success",
+                            "Status": "Successfull",
                             "Message": "Job application analysis data inserted successfully"
                         }
                 except Exception as e:
