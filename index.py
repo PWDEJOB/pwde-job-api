@@ -1717,10 +1717,9 @@ async def applyingForJob(job_id: str, request: Request):
                     insert_job_application_analysis_data = supabase.table("job_application_analysis_data").insert(job_application_analysis_data).execute()
 
                     if insert_job_application_analysis_data.data:
-                        return {
-                            "Status": "Success",
-                            "Message": "Job application analysis data inserted successfully"
-                        }
+                        print("Job application analysis data inserted successfully")
+                    else:
+                        print("Warning: Job application analysis data insertion returned no data")
                 except Exception as e:
                     print(f"=== ERROR: Job Application Analysis Data Insertion Failed ===")
                     print(f"Error type: {type(e)}")
