@@ -981,7 +981,7 @@ async def updateEmployerProfile(
     location: str = Form(None),
     tags: str = Form(None),
     logo: UploadFile = File(None)
-):
+): 
     def not_empty(val):
         return val not in [None, ""]
     
