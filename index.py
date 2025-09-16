@@ -10,6 +10,7 @@ from datetime import datetime
 import httpx
 import asyncio
 import re
+from datetime import date
 
 app = FastAPI()
 app.add_middleware(
@@ -138,6 +139,51 @@ async def getAuthUserIdFromRequest(redis, request: Request):
     
     return auth_userID
 
+# Limit employer signups per day (default 5)
+async def limitNewUsers(supabase_check, daily_limit: int = 5):
+    # Calculate start and end of current day in ISO format
+    start_of_day = datetime.combine(date.today(), datetime.min.time())
+    end_of_day = datetime.combine(date.today(), datetime.max.time())
+
+    # Query count of employers created today
+    result = (
+        supabase_check
+            .table("employers")
+            .select("*", count="exact")
+            .gte("created_at", start_of_day.isoformat())
+            .lt("created_at", end_of_day.isoformat())
+            .execute()
+    )
+
+    # Extract count safely (supports clients that may not expose .count)
+    todays_count = getattr(result, "count", None)
+    if todays_count is None:
+        todays_count = len(result.data) if getattr(result, "data", None) else 0
+
+    if todays_count >= daily_limit:
+        return {
+            "Status": "Error",
+            "Message": f"Daily signup limit reached ({daily_limit}). Please try again tomorrow."
+        }
+
+    return {
+        "Status": "OK"
+    }
+
+
+#check if user is already in the database
+async def checkIfEmployerExists(supabase_check, email):
+    user = supabase_check.table("employers").select("*").eq("email", email).execute()
+    if user.data:
+        return True
+    return False
+
+#check if employee signup email already exists
+async def checkIfEmployeeExists(supabase_check, email):
+    user = supabase_check.table("employee").select("*").eq("email", email).execute()
+    if user.data:
+        return True
+    return False
 
 #Send basic notification
 async def sendNotification(user_id: str, receiver_id: str, content: str, category: str):
@@ -319,6 +365,13 @@ async def signUp(
     pwd_id_back: UploadFile = File(None)
 ):
     role = "employee"
+    # Prevent duplicate email registrations in employee table
+    supabase_check = create_client(url, service_key)
+    if await checkIfEmployeeExists(supabase_check, email):
+        return {
+            "Status": "Error",
+            "Message": "Email already registered as an employee"
+        }
     try:
         # First step: Sign up the user
         supabase: Client = create_client(url, key)
@@ -629,6 +682,18 @@ async def signUp(
             "Status": "Error",
             "Message": "Company logo is required"
         }
+    
+    supabase_check = create_client(url, service_key)
+    # Prevent duplicate email registrations in employers table
+    if await checkIfEmployerExists(supabase_check, email):
+        return {
+            "Status": "Error",
+            "Message": "Email already registered as an employer"
+        }
+    # Enforce daily signup limit
+    signup_limit_check = await limitNewUsers(supabase_check)
+    if signup_limit_check.get("Status") == "Error":
+        return signup_limit_check
     
     # sign up the user
     try:
