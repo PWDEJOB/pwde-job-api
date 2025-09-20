@@ -1,16 +1,16 @@
-from fastapi import FastAPI, Request, HTTPException, File, UploadFile, Form, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, HTTPException, File, UploadFile, Form, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import File, UploadFile, Depends
-from typing import List
 import json
-from redis_server.redis_client import redis
-from models.model import updateEmployer, updateEmployee, loginCreds, inputSignupEmployer, inputSignupEmployee, jobCreation, updateJob, PasswordReset, PasswordResetConfirm
+from models.model import loginCreds, jobCreation, updateJob, PasswordReset, PasswordResetConfirm
 import ast
 from datetime import datetime
-import httpx
 import asyncio
 import re
 from datetime import date
+from utils.recomendation.service import parseSkills, calculateJobMatchScore
+from utils.Oauth_other.service import limitNewUsers, checkIfEmployerExists, checkIfEmployeeExists
+from utils.session.service import getAuthUserIdFromRequest, settingAuthUserToRedis, deleteSessionRedis
+from utils.notification.service import sendNotification, getUserPushToken, sendPushNotification, getJobStatusNotificationContent, getNotificationContent
 
 app = FastAPI()
 app.add_middleware(
@@ -22,14 +22,13 @@ app.add_middleware(
 )
 
 import os
-from supabase import create_client, Client
+from utils.general.service import getSupabaseClient, getSupabaseServiceClient
 from groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
 
 url = os.getenv("SUPABASE_URL")
-key = os.getenv("SUPABASE_PRIVATE_KEY")
 service_key = os.getenv("SUPABASE_SERVICE_KEY")
 
 
@@ -42,8 +41,8 @@ async def root ():
 async def preload(request: Request):
     try:
         # Get the auth user ID from the request
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -101,251 +100,6 @@ async def preload(request: Request):
             "Details": str(e)
         }
 
-#Password reset to be followded after this week
-
-# To send an authenticated request to the backend (e.g., /view-profile):
-# Retrieve the access token (from localStorage, sessionStorage, or cookies).
-# Add it to the request header as: Authorization: Bearer <access_token>.
-
-# Example (using Fetch API):
-#   
-#    const accessToken = localStorage.getItem('access_token'); // or from a cookie
-#   
-#    fetch('http://localhost:8000/view-profile', {
-#      method: 'GET',
-#      headers: {
-#        'Authorization': `Bearer ${accessToken}`
-# }
-# })
-
-# functions for retriving session or to be speficifc the user ID
-async def getAuthUserIdByToken(redis, access_token):
-    value = await redis.get(access_token)
-    if value:
-        session_data = json.loads(value)
-        return session_data.get("auth_userID")
-    return None
-
-async def getAuthUserIdFromRequest(redis, request: Request):
-    token = request.headers.get("Authorization")
-    if not token or not token.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid token")
-    
-    access_token = token.split("Bearer ")[1]
-    
-    auth_userID = await getAuthUserIdByToken(redis, access_token)
-    if not auth_userID:
-        raise HTTPException(status_code=401, detail="Session not found in Redis")
-    
-    return auth_userID
-
-# Limit employer signups per day (default 5)
-async def limitNewUsers(supabase_check, daily_limit: int = 5):
-    # Calculate start and end of current day in ISO format
-    start_of_day = datetime.combine(date.today(), datetime.min.time())
-    end_of_day = datetime.combine(date.today(), datetime.max.time())
-
-    # Query count of employers created today
-    result = (
-        supabase_check
-            .table("employers")
-            .select("*", count="exact")
-            .gte("created_at", start_of_day.isoformat())
-            .lt("created_at", end_of_day.isoformat())
-            .execute()
-    )
-
-    # Extract count safely (supports clients that may not expose .count)
-    todays_count = getattr(result, "count", None)
-    if todays_count is None:
-        todays_count = len(result.data) if getattr(result, "data", None) else 0
-
-    if todays_count >= daily_limit:
-        return {
-            "Status": "Error",
-            "Message": f"Daily signup limit reached ({daily_limit}). Please try again tomorrow."
-        }
-
-    return {
-        "Status": "OK"
-    }
-
-
-#check if user is already in the database
-async def checkIfEmployerExists(supabase_check, email):
-    user = supabase_check.table("employers").select("*").eq("email", email).execute()
-    if user.data:
-        return True
-    return False
-
-#check if employee signup email already exists
-async def checkIfEmployeeExists(supabase_check, email):
-    user = supabase_check.table("employee").select("*").eq("email", email).execute()
-    if user.data:
-        return True
-    return False
-
-#Send basic notification
-async def sendNotification(user_id: str, receiver_id: str, content: str, category: str):
-    supabase = create_client(url, service_key)
-    
-    # Validate inputs
-    if not user_id or not receiver_id or not content or not category:
-        raise Exception(f"Missing required notification data: user_id={user_id}, receiver_id={receiver_id}, content={content}, category={category}")
-    
-    # Ensure all inputs are strings
-    user_id = str(user_id)
-    receiver_id = str(receiver_id)
-    content = str(content)
-    category = str(category)
-
-    #employer notifs categories
-    if category == "new_applicant":
-        title = "You have a new applicant"
-    elif category == "message":
-        title = "You have a new message"
-    
-    #employee notifs categories
-    if category == "message":
-        title = "You have a new message"
-    elif category == "job_application_accepted":
-        title = "Your job application has been accepted"
-    elif category == "job_application_rejected":
-        title = "Your job application has been rejected"
-    elif category == "job_application_sent":
-        title = "Your job application is sent"
-    else:
-        title = "Notification"  # Default title
-        
-    try:
-        notification_data = {
-            "title": title,
-            "user_id": user_id,
-            "receiver_id": receiver_id,
-            "content": content,
-            "category": category
-        }
-        #
-        # print(f"DEBUG - sendNotification data:")
-        # print(f"  title: {title}")
-        # print(f"  user_id: {user_id}")
-        # print(f"  receiver_id: {receiver_id}")
-        # print(f"  content: {content}")
-        # print(f"  category: {category}")
-        # #
-        
-        result = supabase.table("notifications").insert(notification_data).execute()
-        
-        print(f"DEBUG - insert result: {result}")
-        
-        if not result.data:
-            raise Exception("Failed to insert notification - no data returned")
-            
-    except Exception as e:
-        print(f"Error in sendNotification: {e}")#
-        print(f"Error type: {type(e)}")#
-        raise e 
-
-#Push notification
-async def get_user_push_token(user_id: str) -> str:
-    """Get the active push token for a user from the database"""
-    try:
-        supabase = create_client(url, service_key)
-        response = supabase.table("push_tokens").select("expo_token").eq("user_id", user_id).eq("active", True).execute()
-        
-        if response.data and len(response.data) > 0:
-            return response.data[0]["expo_token"]
-        return None
-    except Exception as e:
-        print(f"❌ Error getting push token for user {user_id}: {str(e)}")
-        return None
-
-async def send_push_notification(expo_token: str, title: str, body: str, data: dict = None):
-    """Send push notification via Expo Push API"""
-    try:
-        notification_payload = {
-            "to": expo_token,
-            "title": title,
-            "body": body,
-            "sound": "default",
-            "priority": "high"
-        }
-        
-        if data:
-            notification_payload["data"] = data
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://exp.host/--/api/v2/push/send",
-                json=notification_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                }
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                print(f"✅ Push notification sent successfully: {result}")
-                return result
-            else:
-                print(f"❌ Failed to send push notification: {response.status_code} - {response.text}")
-                return None
-                
-    except Exception as e:
-        print(f"❌ Error sending push notification: {str(e)}")
-        return None
-
-def get_notification_content(message_type: str):
-    """Get appropriate notification title and body based on message type"""
-    if message_type == "google_meet_link":
-        return {
-            "title": "🎥 Interview Scheduled!",
-            "body": "You have a new interview scheduled. Tap to join the meeting."
-        }
-    elif message_type == "form_link":
-        return {
-            "title": "📝 Test Assigned!",
-            "body": "A new technical test has been assigned to you."
-        }
-    elif message_type == "status_update":
-        return {
-            "title": "📋 Status Update",
-            "body": "There's an update on your application status."
-        }
-    else:  # text or default
-        return {
-            "title": "💬 New Message",
-            "body": "You have received a new message from an employer."
-        }
-
-def get_job_status_notification_content(status: str, job_title: str):
-    """Get appropriate notification title and body based on job application status"""
-    if status == "accepted":
-        return {
-            "title": "🎉 Application Accepted!",
-            "body": f"Congratulations! Your application for {job_title} has been accepted."
-        }
-    elif status == "rejected":
-        return {
-            "title": "📋 Application Update",
-            "body": f"Your application for {job_title} has been rejected."
-        }
-    elif status == "under_review":
-        return {
-            "title": "👀 Application Under Review",
-            "body": f"Your application for {job_title} is now under review."
-        }
-    elif status == "pending_requirements":
-        return {
-            "title": "📄 Requirements Pending",
-            "body": f"Additional requirements needed for your {job_title} application."
-        }
-    else:
-        return {
-            "title": "📋 Application Status Update",
-            "body": f"There's an update on your application for {job_title}."
-        }
 #Authentication Process
 
 # Signup and login for employee and employer
@@ -366,15 +120,15 @@ async def signUp(
 ):
     role = "employee"
     # Prevent duplicate email registrations in employee table
-    supabase_check = create_client(url, service_key)
-    if await checkIfEmployeeExists(supabase_check, email):
+    
+    if await checkIfEmployeeExists(email):
         return {
             "Status": "Error",
             "Message": "Email already registered as an employee"
         }
     try:
         # First step: Sign up the user
-        supabase: Client = create_client(url, key)
+        supabase = getSupabaseClient()
         response = supabase.auth.sign_up(
             {
                 "email": email, 
@@ -395,12 +149,12 @@ async def signUp(
         }
     try:
         # Second step: Insert initial user data
-        supabase_insert: Client = create_client(url, service_key)
+        supabase_insert = getSupabaseServiceClient()
         user_data = {
             "user_id": response.user.id,
             "full_name": full_name,
             "email": email,
-            "role": role
+            "role": role 
         }
         
         # If additional info is provided, add it to user_data
@@ -576,7 +330,7 @@ async def employee_login(user: loginCreds):
         }
     
     try:
-        supabase: Client = create_client(url, key)
+        supabase = getSupabaseClient()
         response = supabase.auth.sign_in_with_password(
             {
                 "email": user.email,
@@ -643,20 +397,19 @@ async def employee_login(user: loginCreds):
     }
     
     try:
-        await redis.set(access_token, json.dumps(session_data), ex=None)
+        await settingAuthUserToRedis(session_data, access_token)
+        # return success response
+        return {
+            "Status": "Success",
+            "Message": "Login successful",
+            "Token": access_token,
+            "User_ID": auth_userID
+        }
     except Exception as e:
         return {
             "Status": "Error",
             "Message": "Login successful but session storage failed. Please try again.",
         }
-    
-    # return success response
-    return {
-        "Status": "Success",
-        "Message": "Login successful",
-        "Token": access_token,
-        "User_ID": auth_userID
-    }
 
 
 @app.post("/employer/signup") # signup for employer
@@ -683,21 +436,20 @@ async def signUp(
             "Message": "Company logo is required"
         }
     
-    supabase_check = create_client(url, service_key)
     # Prevent duplicate email registrations in employers table
-    if await checkIfEmployerExists(supabase_check, email):
+    if await checkIfEmployerExists(email):
         return {
             "Status": "Error",
             "Message": "Email already registered as an employer"
         }
     # Enforce daily signup limit
-    signup_limit_check = await limitNewUsers(supabase_check)
+    signup_limit_check = await limitNewUsers()
     if signup_limit_check.get("Status") == "Error":
         return signup_limit_check
     
     # sign up the user
     try:
-        supabase = create_client(url, key)
+        supabase = getSupabaseClient()
         response = supabase.auth.sign_up(
             {
                 "email": email, 
@@ -768,7 +520,7 @@ async def signUp(
             }
         
         # Prepare user data
-        supabase_insert = create_client(url, key)
+        supabase_insert = getSupabaseServiceClient()
         user_data = {
             "user_id": response.user.id,
             "email": email,
@@ -825,7 +577,7 @@ async def employer_login(user: loginCreds):
     
     # attempt authentication
     try:
-        supabase: Client = create_client(url, key)
+        supabase = getSupabaseClient()
         response = supabase.auth.sign_in_with_password(
             {
                 "email": user.email,
@@ -893,32 +645,32 @@ async def employer_login(user: loginCreds):
     }
     
     try:
-        await redis.set(access_token, json.dumps(session_data), ex=None)
+        await settingAuthUserToRedis(session_data, access_token)
+
+            # return success response
+        return {
+            "Status": "Success",
+            "Message": "Login successful",
+            "Token": access_token,
+            "User_ID": auth_userID
+        }
     except Exception as e:
         return {
             "Status": "Error",
             "Message": "Login successful but session storage failed. Please try again.",
         }
-    
-    # return success response
-    return {
-        "Status": "Success",
-        "Message": "Login successful",
-        "Token": access_token,
-        "User_ID": auth_userID
-    }
 #profile management
 @app.get("/profile/view-profile") # view profile
 async def viewProfile(request: Request):
     # authentication
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         if not auth_userID:
             return {
                 "Status": "Error",
                 "Message": "Invalid user ID"
             }
-        supabase = create_client(url, key)
+        supabase = getSupabaseClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -987,13 +739,13 @@ async def updateEmployerProfile(
     
     # authentication
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         if not auth_userID:
             return {
                 "Status": "Error",
                 "Message": "Invalid user ID"
             }
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -1143,13 +895,13 @@ async def updateEmployeeProfile(
     
     # authentication
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         if not auth_userID:
             return {
                 "Status": "Error",
                 "Message": "Invalid user ID"
             }
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -1342,9 +1094,9 @@ async def updateEmployeeProfile(
 async def createJob(job: jobCreation, request: Request):
     #check if the user is authenticated
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         #check first if the user exist as an employer
-        supabase: Client = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -1402,8 +1154,8 @@ async def createJob(job: jobCreation, request: Request):
 @app.get("/jobs/view-all-jobs")
 async def viewAllJobs(request: Request):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -1430,7 +1182,7 @@ async def viewSpecificJob(id: str):
     try:
         # auth_userID = await getAuthUserIdFromRequest(redis, request) .eq("user_id", auth_userID)
         
-        supabase = create_client(url, key)
+        supabase = getSupabaseClient()
         
         job = supabase.table("jobs").select("*").eq("id", id).execute()
         
@@ -1454,8 +1206,8 @@ async def viewSpecificJob(id: str):
 @app.post("/jobs/delete-job/{id}")
 async def deleteJob(request: Request, id: str):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
 
         # First check if the user is an employer and authorized to delete this job
         search_id = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
@@ -1536,8 +1288,8 @@ async def deleteJob(request: Request, id: str):
 @app.post("/jobs/update-job/{id}")
 async def updateSpecificJob(request: Request, id: str, job: updateJob):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
 
         # Check if the user is an employer
         search_id = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
@@ -1594,8 +1346,8 @@ async def updateSpecificJob(request: Request, id: str, job: updateJob):
 async def reccomendJobs(request: Request):
     try:
         # Get the user details
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseClient()
 
         # Fetch the user details
         search_user = supabase.table("employee").select("*").eq("user_id", auth_userID).single().execute()
@@ -1611,60 +1363,15 @@ async def reccomendJobs(request: Request):
 
         # Parse the skills
         skills_raw = search_user.data.get("skills", "[]")
-        if isinstance(skills_raw, list):
-            skills_list = skills_raw
-        elif isinstance(skills_raw, str):
-            try:
-                skills_list = ast.literal_eval(skills_raw)
-                if not isinstance(skills_list, list):
-                    skills_list = [s.strip() for s in skills_raw.split(",") if s.strip()]
-            except Exception:
-                skills_list = [s.strip() for s in skills_raw.split(",") if s.strip()]
-        else:
-            skills_list = []
+        user_skills_set = await parseSkills(skills_raw)
 
-        user_skills_set = set()
-        for skill in skills_list:
-            if isinstance(skill, str):
-                user_skills_set.add(skill.strip().lower())
-
-        # Fetch jobs based on disability
-        if disability == "None":
-            jobs_response = supabase.table("jobs").select("*").execute()
-            jobs_data = jobs_response.data or []
-        else:
-            jobs_response = supabase.table("jobs").select("*").eq("pwd_friendly", True).execute()
-            jobs_data = jobs_response.data or []
+        # Fetch jobs
+        jobs_response = supabase.table("jobs").select("*").eq("pwd_friendly", True).eq("skill_1", user_skills_set[0]).eq("skill_2", user_skills_set[1]).eq("skill_3", user_skills_set[2]).eq("skill_4", user_skills_set[3]).eq("skill_5", user_skills_set[4]).execute()
+        jobs_data = jobs_response.data or []
 
         # Recommendations
-        recommendations = []
 
-        for job in jobs_data:
-            # Extract job skills
-            job_skills = []
-            for i in range(1, 6):
-                skill = job.get(f"skill_{i}", "")
-                if isinstance(skill, str) and skill.strip():
-                    job_skills.append(skill.strip().lower())
-
-            job_skills_set = set(job_skills)
-
-            # Calculate skill match score
-            matched_skills_set = user_skills_set & job_skills_set
-            matched_skills_count = len(matched_skills_set)
-
-            if job_skills_set:
-                skill_match_score = matched_skills_count / len(job_skills_set)
-            else:
-                skill_match_score = 0
-
-            # Create a copy of the job details and add match data
-            # Exclude jobs with zero match score
-            if skill_match_score > 0:
-                job_copy = job.copy()
-                job_copy["skill_match_score"] = skill_match_score
-                job_copy["matched_skills"] = list(matched_skills_set)
-                recommendations.append(job_copy)
+        recommendations = await calculateJobMatchScore(user_skills_set, jobs_data)
                 
         # Sort and return top 5 recommendations
         recommendations.sort(key=lambda x: x["skill_match_score"], reverse=True)
@@ -1682,6 +1389,8 @@ async def reccomendJobs(request: Request):
                     "job_id": job_id
                 }).execute()
 
+                #recursive optimization: 
+
         return {
             "recommendations": recommendations
         }
@@ -1695,9 +1404,9 @@ async def reccomendJobs(request: Request):
 @app.post("/apply-job/{job_id}")
 async def applyingForJob(job_id: str, request: Request):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
         
         # check the user id in auth)userID is an employer
         
@@ -1707,7 +1416,7 @@ async def applyingForJob(job_id: str, request: Request):
             apply_job = supabase.table("employee_history").update({"applied": True}).eq("job_id", job_id).eq("user_id", auth_userID).execute()
             
             if apply_job.data:
-                supabase_job_data_insertion = create_client(url, service_key)
+                supabase_job_data_insertion = getSupabaseServiceClient()
                 #get the user details
                 user_details = supabase.table("employee").select("*").eq("user_id", auth_userID).single().execute()
                 job_data = {
@@ -1846,9 +1555,9 @@ async def applyingForJob(job_id: str, request: Request):
 @app.get("/view-applicants/{job_id}")
 async def viewAllApplicantsInJobListing(request: Request, job_id: str):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         
-        supabase = create_client(url, key)
+        supabase = getSupabaseClient()
         
         check_user = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
         
@@ -1894,7 +1603,7 @@ async def logout(request: Request):
     
     try:
         # Delete the session from Redis
-        await redis.delete(access_token)
+        await deleteSessionRedis(access_token)
         # print("Successfully deleted token from Redis")
         
         return {
@@ -1917,6 +1626,7 @@ async def request_password_reset(reset_request: PasswordReset):
     Send a password reset email to the user.
     This uses Supabase's built-in password reset functionality.
     """
+
     try:
         # Validate email input
         if not reset_request.email or not reset_request.email.strip():
@@ -1937,7 +1647,7 @@ async def request_password_reset(reset_request: PasswordReset):
         
         # Initialize Supabase client with error handling
         try:
-            supabase: Client = create_client(url, service_key)
+            supabase = getSupabaseServiceClient()
         except Exception as client_error:
             print(f"❌ Failed to initialize Supabase client: {str(client_error)}")
             return {
@@ -1977,8 +1687,7 @@ async def request_password_reset(reset_request: PasswordReset):
         return {
             "Status": "Success",
             "Message": "If an account with this email exists, a 6-digit reset code has been sent to your email address. Please check your inbox and spam folder."
-        }
-        
+        }   
     except Exception as e:
         print(f"❌ Unexpected error in password reset request: {str(e)}")
         return {
@@ -2051,7 +1760,7 @@ async def confirm_password_reset(reset_confirm: PasswordResetConfirm):
         
         # Initialize Supabase client with error handling
         try:
-            supabase: Client = create_client(url, service_key)
+            supabase = getSupabaseServiceClient()
         except Exception as client_error:
             print(f"❌ Failed to initialize Supabase client: {str(client_error)}")
             return {
@@ -2178,8 +1887,8 @@ async def uploadResume(request: Request, file: UploadFile = File(...)):
                 "Message": "File size exceeds 5MB limit"
             }
 
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseClient()
 
         # Check if the user is an employee
         check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
@@ -2257,10 +1966,10 @@ async def uploadSSS(request: Request, file: UploadFile = File(...)):
         else:
             content_type = "image/jpeg"  # default fallback
         
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         # print(f"🔍 Auth User ID: {auth_userID}")
         
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
         
         # Check if documents bucket exists
         # try:
@@ -2346,7 +2055,7 @@ async def uploadSSS(request: Request, file: UploadFile = File(...)):
 async def testStorage():
     """Test endpoint to check Supabase storage connectivity"""
     try:
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
         
         # List available buckets
         buckets = supabase.storage.list_buckets()
@@ -2413,10 +2122,10 @@ async def uploadPhilhealth(request: Request, file: UploadFile = File(...)):
         else:
             content_type = "image/jpeg"  # default fallback
         
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         # print(f"🔍 Auth User ID: {auth_userID}")
         
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
         
         # Check if documents bucket exists
         # try:
@@ -2530,10 +2239,10 @@ async def uploadPagibig(request: Request, file: UploadFile = File(...)):
         else:
             content_type = "image/jpeg"  # default fallback
         
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         # print(f"🔍 Auth User ID: {auth_userID}")
         
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
         
         # Check if documents bucket exists
         # try:
@@ -2618,8 +2327,8 @@ async def uploadPagibig(request: Request, file: UploadFile = File(...)):
 @app.get("/get-documents")
 async def getDocuments(request: Request, user_id: str = None):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
         
         # If user_id is provided, check if requester is an employer
         if user_id:
@@ -2683,9 +2392,9 @@ async def getDocuments(request: Request, user_id: str = None):
 async def updateApplicationStatus(request : Request, application_id: str, new_status: str):
     # check first if the user authticated is an employer or not
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
         
         check_user = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
         
@@ -2737,14 +2446,14 @@ async def updateApplicationStatus(request : Request, application_id: str, new_st
                     try:
                         # Get applicant's push token
                         applicant_user_id = receiver_id.data["user_id"]
-                        push_token = await get_user_push_token(applicant_user_id)
+                        push_token = await getUserPushToken(applicant_user_id)
                         
                         if push_token:
                             # Get appropriate notification content based on status
-                            notification_content = get_job_status_notification_content(new_status, job_title.data['title'])
+                            notification_content = getJobStatusNotificationContent(new_status, job_title.data['title'])
                             
                             # Send push notification
-                            await send_push_notification(
+                            await sendPushNotification(
                                 expo_token=push_token,
                                 title=notification_content["title"],
                                 body=notification_content["body"],
@@ -2802,9 +2511,9 @@ async def updateApplicationStatus(request : Request, application_id: str, new_st
 async def viewApplicationHistory(request: Request):
     # check first if the user authticated is an employer or not
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         
-        supabase = create_client(url, key)
+        supabase = getSupabaseServiceClient()
         
         check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
         
@@ -2892,9 +2601,9 @@ async def viewApplicationHistory(request: Request):
 @app.post("/decline-application/{application_id}")
 async def declineApplication(request: Request, application_id: str):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
         
         check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
 
@@ -2929,9 +2638,9 @@ async def declineApplication(request: Request, application_id: str):
 @app.get("/get-declined-applications")
 async def viewDeclinedApplications(request: Request):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
         
         get_all_declined_applications = supabase.table("declined_jobs").select("*").eq("user_id", auth_userID).execute()
         
@@ -2963,242 +2672,16 @@ async def viewDeclinedApplications(request: Request):
 #track active  connections on redis (Upstash)
 from typing import Dict
 from models.model import ChatMessage
+from utils.message.service import getInboxMessages, getJobDetails, getApplicationStatus
 
 
-active_connections: Dict[str, WebSocket] = {}
 
-
-# async def connect_user(websocket: WebSocket, user_id: str):
-#     try:
-#         await websocket.accept()
-#         active_connections[user_id] = websocket
-#         # fetch any offline messages amd send them
-#         await send_offline_messages(user_id)
-#     except Exception as e:
-#         return {
-#             "Status": "Error",
-#             "Message": f"Failed to connect to user {user_id}",
-#             "Details": f"{e}"
-#         }
-
-# async def disconnect_user(websocket: WebSocket, user_id: str):
-#     try:
-#         if user_id in active_connections:
-#             await active_connections[user_id].close()
-#             del active_connections[user_id]
-#     except Exception as e:
-#         return {
-#             "Status": "Error",
-#             "Message": f"Failed to disconnect user {user_id}",
-#             "Details": f"{e}"
-#         }
-
-# async def get_active_connections(user_id: str) -> WebSocket | None:
-#     return active_connections.get(user_id)
-
-# async def send_message(message: ChatMessage):
-#     try:
-#         # store message in supabase
-#         supabase = create_client(url, service_key)
-#         response = supabase.table("messages").insert({
-#             "sender_id": message.sender_id,
-#             "receiver_id": message.receiver_id,
-#             "type": message.type,
-#             "message": message.message,
-#             "job_id": message.job_id,
-#             "created_at": datetime.utcnow().isoformat()
-#         }).execute()
-
-#         if not response.data:
-#             return {
-#                 "Status": "Error",
-#                 "Message": "Failed to send message"
-#             }
-        
-#         #prepare payload for websocket
-#         message_paylaod = {
-#             "type": "chat_message",
-#             "data": {
-#                 **message.model_dump(),
-#                 "id": response.data[0]["id"]
-#             }
-#         }
-
-#         # if the reciver is online, send message DIRECTLY
-#         reciever_websocket = await get_active_connections(message.receiver_id)
-#         if reciever_websocket:
-#             try:
-#                 await reciever_websocket.send_text(json.dumps(message_paylaod))
-#             except Exception as e:
-#                 return {
-#                     # if the sending fails, message is already in supabase db for offline retrieval
-#                     "Status": "Error",
-#                     "Message": "User is Offline, However Message is stored in the database"
-#                 }
-        
-#         return{
-#             "Status": "Success",
-#             "Message": "Message is sent and Stored in the database",
-#             "data": response.data[0]
-#         }
-#     except Exception as e:
-#         return {
-#             "Status": "Error",
-#             "Message": f"Failed to send message: {str(e)}"
-#         }
-# async def send_offline_messages(user_id: str):
-#     # fetch and send messages that were recived while the user was offline
-#     try:
-#         supabase = create_client(url, service_key)
-#         response = supabase.table("messages").select("*").eq("receiver_id", user_id).eq("is_read", False).order("created_at").execute()
-
-#         if response.data:
-#             websocket = await get_active_connections(user_id)
-#             if websocket:
-#                 for message in response.data:
-#                     message_payload = {
-#                         "type": "chat_message",
-#                         "data": message
-#                     }
-#                     await websocket.send_text(json.dumps(message_payload))
-
-#                     #mark messages read
-#                     message_ids = [message["id"] for message in response.data]
-#                     supabase.table("messages").update({
-#                         "is_read": True
-#                     }).in_("id", message_ids).execute()
-
-#             return {
-#                 "Status": "Success",
-#                 "Message": "Offline messages sent"
-#             }
-#     except Exception as e:
-#         return {
-#             "Status": "Error",
-#             "Message": "Failed to send offline messages",
-#             "Details": f"{e}"
-#         }
-
-# # websocket endpoint
-# async def get_user_id_from_token(token: str) -> str:
-#     """Validate token and get user_id from Upstash Redis"""
-#     try:
-#         if not token:
-#             raise WebSocketDisconnect(reason="Missing token")
-        
-#         # Get session data from Upstash Redis
-#         value = await redis.get(token)
-#         if not value:
-#             raise WebSocketDisconnect(reason="Invalid or expired token")
-        
-#         try:
-#             session_data = json.loads(value)
-#             auth_user_id = session_data.get("auth_userID")
-#             if not auth_user_id:
-#                 raise WebSocketDisconnect(reason="Invalid session data")
-#             return auth_user_id
-#         except json.JSONDecodeError:
-#             raise WebSocketDisconnect(reason="Corrupted session data")
-            
-#     except Exception as e:
-#         if isinstance(e, WebSocketDisconnect):
-#             raise e
-#         raise WebSocketDisconnect(reason=f"Authentication error: {str(e)}")
-
-# @app.websocket("/ws/chat/{user_id}")
-# async def websocket_endpoint(
-#     websocket: WebSocket,
-#     user_id: str,
-#     token: str = None
-# ):
-#     print(f"WebSocket connection attempt for user_id: {user_id}")  # Debug log
-#     try:
-#         # Validate token and get authenticated user ID
-#         if not token:
-#             print("No token provided")  # Debug log
-#             await websocket.close(code=4001, reason="Missing authentication token")
-#             return
-            
-#         print("Validating token...")  # Debug log
-#         try:
-#             auth_user_id = await get_user_id_from_token(token)
-#             print(f"Token validated for user: {auth_user_id}")  # Debug log
-#         except WebSocketDisconnect as e:
-#             print(f"WebSocket disconnect during auth: {str(e)}")  # Debug log
-#             await websocket.close(code=4002, reason=str(e))
-#             return
-#         except Exception as e:
-#             print(f"Authentication error: {str(e)}")  # Debug log
-#             await websocket.close(code=4500, reason="Internal authentication error")
-#             return
-        
-#         # Verify the user_id matches the token
-#         if auth_user_id != user_id:
-#             print(f"User ID mismatch: {auth_user_id} != {user_id}")  # Debug log
-#             await websocket.close(code=4003, reason="User ID mismatch")
-#             return
-        
-#         print("Accepting connection...")  # Debug log
-#         # Store WebSocket connection
-#         await connect_user(websocket, user_id)
-#         print("Connection accepted and stored")  # Debug log
-        
-#         while True:
-#             try:
-#                 data = await websocket.receive_text()
-#                 print(f"Received message from {user_id}: {data[:100]}...")  # Debug log (first 100 chars)
-#                 message_data = json.loads(data)
-                
-#                 # Create ChatMessage instance with validation
-#                 chat_message = ChatMessage(**message_data)
-                
-#                 # Verify sender_id matches authenticated user
-#                 if chat_message.sender_id != auth_user_id:
-#                     # print(f"Sender ID mismatch: {chat_message.sender_id} != {auth_user_id}")  # Debug log
-#                     await websocket.send_json({
-#                         "Status": "Error",
-#                         "Message": "Unauthorized: sender_id does not match authenticated user"
-#                     })
-#                     continue
-                
-#                 # Handle incoming messages
-#                 result = await send_message(chat_message)
-#                 # print(f"Message processed with result: {result}")  # Debug log
-                
-#                 # Send acknowledgment back to client
-#                 await websocket.send_json(result)
-                
-#             except json.JSONDecodeError:
-#                 # print("Invalid JSON received")  # Debug log
-#                 await websocket.send_json({
-#                     "Status": "Error",
-#                     "Message": "Invalid message format"
-#                 })
-#             except Exception as e:
-#                 # print(f"Error processing message: {str(e)}")  # Debug log
-#                 await websocket.send_json({
-#                     "Status": "Error",
-#                     "Message": f"Message processing error: {str(e)}"
-#                 })
-                
-#     except WebSocketDisconnect:
-#         # print(f"WebSocket disconnected for user: {user_id}")  # Debug log
-#         await disconnect_user(websocket, user_id)
-#     except Exception as e:
-#         print(f"WebSocket error: {str(e)}")
-#         await disconnect_user(websocket, user_id)
-#     finally:
-#         # Ensure connection is removed from active_connections
-#         if user_id in active_connections:
-#             del active_connections[user_id]
-#         # print(f"Cleaned up connection for user: {user_id}")  # Debug log
-
-#get the chat history
+#get the chat history with the sender and receiver id
 @app.get("/messages/{sender_id}/{receiver_id}")
-async def get_chat_history(sender_id: str, reciever_id: str, job_id: str = None):
+async def get_chat_history(sender_id: str, receiver_id: str, job_id: str = None):
     try:
-        supabase = create_client(url, service_key)
-        query = supabase.table("messages").select("*").eq("sender_id", sender_id).eq("receiver_id", reciever_id)
+        supabase = getSupabaseServiceClient()
+        query = supabase.table("messages").select("*").eq("sender_id", sender_id).eq("receiver_id", receiver_id)
         
         # Filter by job_id if provided
         if job_id:
@@ -3224,20 +2707,71 @@ async def get_chat_history(sender_id: str, reciever_id: str, job_id: str = None)
             "Details": f"{e}"
         }
 
+#get inbox messages related to teh user
+@app.get("/inbox-messages/{user_id}")
+async def get_inbox_message(user_id: str):
+    try:
+        #get the latest message related to the reciever id
+        # print(f"DEBUG - Getting inbox messages for user {user_id}")
+        # print()
+        # print()
+        # print()
+
+        raw_messages = await getInboxMessages(user_id)
+        # print(f"DEBUG - Raw messages: {raw_messages}")
+        # print()
+        # print()
+        # print()
+
+
+        job_details = await getJobDetails(raw_messages)
+        # print(f"DEBUG - Job details: {job_details}")
+        # print()
+        # print()
+        # print()
+
+        #get status of that applciation
+        statuses = await getApplicationStatus(job_details, user_id)
+        # print(f"DEBUG - Statuses: {statuses}")
+        # print()
+        # print()
+        # print()
+
+        #now we need to merge the results from this functionss(raw messages, with the title in job_details, and the status of that application)
+        merged_results = []
+        for i, message in enumerate(raw_messages):
+            # Find the corresponding job detail and status by index
+            if i < len(job_details) and i < len(statuses):
+                message["job_title"] = job_details[i]["title"]
+                message["status"] = statuses[i][0]["status"] if statuses[i] else "unknown"
+                merged_results.append(message)
+        print(f"DEBUG - Merged results: {merged_results}")
+        return {
+            "Status": "Success",
+            "Message": "Inbox messages fetched successfully",
+            "data": merged_results
+        }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Failed to fetch inbox messages",
+            "Details": f"{e}"
+        }
+        
 # ======== Push Notification Functions ========
 
 
 @app.post("/message/send-message") # send message to a user
 async def send_message(payload: ChatMessage, request: Request):
     # check if the user is authenticated
-    auth_userID = await getAuthUserIdFromRequest(redis, request)
+    auth_userID = await getAuthUserIdFromRequest(request)
     if auth_userID != payload.sender_id:
         return {
             "Status": "Error",
             "Message": "Unauthorized: sender_id does not match authenticated user"
         }
     
-    supabase = create_client(url, service_key)
+    supabase = getSupabaseServiceClient()
     
     # Insert message into database
     response = supabase.table("messages").insert({
@@ -3304,14 +2838,14 @@ async def send_message(payload: ChatMessage, request: Request):
         async def send_notification():
             try:
                 # Get receiver's push token
-                push_token = await get_user_push_token(payload.receiver_id)
+                push_token = await getUserPushToken(payload.receiver_id)
                 
                 if push_token:
                     # Get appropriate notification content based on message type
-                    notification_content = get_notification_content(payload.type)
+                    notification_content = getNotificationContent(payload.type)
                     
                     # Send push notification
-                    await send_push_notification(
+                    await sendPushNotification(
                         expo_token=push_token,
                         title=notification_content["title"],
                         body=notification_content["body"],
@@ -3349,7 +2883,7 @@ async def test_push_notification(user_id: str):
     """Test endpoint to send a push notification to a specific user"""
     try:
         # Get user's push token
-        push_token = await get_user_push_token(user_id)
+        push_token = await getUserPushToken(user_id)
         
         if not push_token:
             return {
@@ -3358,7 +2892,7 @@ async def test_push_notification(user_id: str):
             }
         
         # Send test notification
-        result = await send_push_notification(
+        result = await sendPushNotification(
             expo_token=push_token,
             title="🧪 Test Notification",
             body="This is a test push notification from your backend server!",
@@ -3391,7 +2925,7 @@ async def register_push_token(request: Request):
     """Register/update a user's push notification token"""
     try:
         # Verify authentication first
-        auth_user_id = await getAuthUserIdFromRequest(redis, request)
+        auth_user_id = await getAuthUserIdFromRequest(request)
         if not auth_user_id:
             raise HTTPException(status_code=401, detail="Authentication required")
         
@@ -3420,7 +2954,7 @@ async def register_push_token(request: Request):
             }
         
         # Create Supabase client
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
         
         # print(f"🔔 Registering push token for user: {user_id}")
         # print(f"🔔 Token: {expo_token[:30]}...")
@@ -3469,8 +3003,8 @@ async def register_push_token(request: Request):
 @app.patch("/message/mark-as-read/{message_id}")
 async def mark_message_as_read(message_id: str, request: Request):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -3505,8 +3039,8 @@ async def mark_message_as_read(message_id: str, request: Request):
 @app.patch("/message/mark-all-as-read/{user_id}")
 async def mark_all_messages_as_read(user_id: str, request: Request):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -3541,8 +3075,8 @@ async def mark_all_messages_as_read(user_id: str, request: Request):
 @app.get("/message/get-unread-messages/{user_id}")
 async def get_unread_messages(user_id: str, request: Request):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -3578,8 +3112,8 @@ async def get_unread_messages(user_id: str, request: Request):
 @app.get("/message/get-all-messages/{user_id}")
 async def get_all_messages(user_id: str, request: Request):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -3617,8 +3151,8 @@ async def get_all_messages(user_id: str, request: Request):
 @app.get("/notification/get-all-notifications/{user_id}")
 async def get_all_notifications(user_id: str, request: Request):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -3652,8 +3186,8 @@ async def get_all_notifications(user_id: str, request: Request):
 @app.patch("/notification/mark-as-read/{notification_id}")
 async def mark_notification_as_read(notification_id: str, request: Request):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -3685,8 +3219,8 @@ async def mark_notification_as_read(notification_id: str, request: Request):
 @app.patch("/notification/mark-all-as-read/{user_id}")
 async def mark_all_notifications_as_read(user_id: str, request: Request):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -3719,8 +3253,8 @@ async def mark_all_notifications_as_read(user_id: str, request: Request):
 @app.get("/notification/get-unread-notifications/{user_id}")
 async def get_unread_notifications(user_id: str, request: Request):
     try:
-        auth_userID = await getAuthUserIdFromRequest(redis, request)
-        supabase = create_client(url, service_key)
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -3754,7 +3288,7 @@ async def get_unread_notifications(user_id: str, request: Request):
 @app.post("/notification/delete-notification/{notification_id}")
 async def delete_notification(notification_id: str, request: Request):
     try:
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -3786,7 +3320,7 @@ async def delete_notification(notification_id: str, request: Request):
 @app.get("/job-application-analysis/{user_id}")
 async def get_job_application_analysis(user_id: str, request: Request):
     try:
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
@@ -3828,7 +3362,7 @@ async def verify_pwd_id(user_id: str):
         }
     
     try:
-        supabase = create_client(url, service_key)
+        supabase = getSupabaseServiceClient()
     except Exception as e:
         return {
             "Status": "Error",
