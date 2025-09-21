@@ -1364,9 +1364,13 @@ async def reccomendJobs(request: Request):
         # Parse the skills
         skills_raw = search_user.data.get("skills", "[]")
         user_skills_set = await parseSkills(skills_raw)
+        
+        # Convert set to list for indexing
+        user_skills_list = list(user_skills_set)
 
-        # Fetch jobs
-        jobs_response = supabase.table("jobs").select("*").eq("pwd_friendly", True).eq("skill_1", user_skills_set[0]).eq("skill_2", user_skills_set[1]).eq("skill_3", user_skills_set[2]).eq("skill_4", user_skills_set[3]).eq("skill_5", user_skills_set[4]).execute()
+        # Fetch jobs - use a more flexible approach since we don't know which skills match
+        # First, get all PWD-friendly jobs
+        jobs_response = supabase.table("jobs").select("*").eq("pwd_friendly", True).execute()
         jobs_data = jobs_response.data or []
 
         # Recommendations
