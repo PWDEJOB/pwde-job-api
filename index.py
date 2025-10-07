@@ -1453,11 +1453,11 @@ async def applyingForJob(job_id: str, request: Request):
                     job_type = get_job_data.data["job_type"]
                     userid_of_employer = get_job_data.data["user_id"]
 
-                    months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+                    # months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
                     #calculate what month the user applied for th job
-                    month_number = datetime.now().month
-                    month = months[int(month_number) -1]
+                    month = datetime.now().strftime('%B')
+                    
 
                     #calculate what year the user applied for the job
                     year = datetime.now().year
