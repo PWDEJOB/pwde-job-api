@@ -1520,6 +1520,7 @@ async def applyingForJob(job_id: str, request: Request):
                 try:
                     job_title = supabase.table("jobs").select("title").eq("id", job_id).single().execute()
                     content = f"You have a new applicant for your job {job_title.data['title']}"
+                    print(f"DEBUG - Notification content: {content}")
                 except Exception as e:
                     return {
                         "Status": "Error",
@@ -1529,6 +1530,7 @@ async def applyingForJob(job_id: str, request: Request):
                 try:
                     receiver_id = supabase.table("jobs").select("user_id").eq("id", job_id).single().execute()
                     await sendNotification(user_id, receiver_id.data["user_id"], content, category)
+                    print(f"DEBUG - Notification sent to employer {receiver_id.data['user_id']}")
                 except Exception as e:
                     return {
                         "Status": "Error",
