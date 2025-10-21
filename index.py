@@ -1432,7 +1432,29 @@ async def applyingForJob(job_id: str, request: Request):
 
                 # add arkha matching scoring here soon POGGGGGGGGG
                 
-                insert_job_appliead = supabase_job_data_insertion.table("job_applications").insert(job_data).execute()
+                insert_job_appliead = supabase_job_data_insertion.table("job_applications").insert(job_data).execute()                #send notification to the employer
+                user_id = auth_userID
+                category = "new_applicant"
+                try:
+                    job_title = supabase.table("jobs").select("title").eq("id", job_id).single().execute()
+                    content = f"You have a new applicant for your job {job_title.data['title']}"
+                    print(f"DEBUG - Notification content: {content}")
+                except Exception as e:
+                    return {
+                        "Status": "Error",
+                        "Message": "Error getting job title",
+                        "Details": f"{e}"
+                    }
+                try:
+                    receiver_id = supabase.table("jobs").select("user_id").eq("id", job_id).single().execute()
+                    await sendNotification(user_id, receiver_id.data["user_id"], content, category)
+                    print(f"DEBUG - Notification sent to employer {receiver_id.data['user_id']}")
+                except Exception as e:
+                    return {
+                        "Status": "Error",
+                        "Message": "Error storing notification",
+                        "Details": f"{e}"
+                    }
 
                 try:
                     #get the job data for insert in "job application analysis data"
@@ -1503,46 +1525,17 @@ async def applyingForJob(job_id: str, request: Request):
                             "Message": "Job application analysis data inserted successfully"
                         }
                 except Exception as e:
-                    # print(f"=== ERROR: Job Application Analysis Data Insertion Failed ===")
-                    # print(f"Error type: {type(e)}")
-                    # print(f"Error message: {str(e)}")
-                    # print(f"Error details: {e}")
-                    # print("=== END ERROR ===")
                     return {
                         "Status": "Error",
                         "Message": "Error inserting job application analysis data",
                         "Details": f"{e}"
                     }
-                    
-                #send notification to the employer
-                user_id = auth_userID
-                category = "new_applicant"
-                try:
-                    job_title = supabase.table("jobs").select("title").eq("id", job_id).single().execute()
-                    content = f"You have a new applicant for your job {job_title.data['title']}"
-                    print(f"DEBUG - Notification content: {content}")
-                except Exception as e:
-                    return {
-                        "Status": "Error",
-                        "Message": "Error getting job title",
-                        "Details": f"{e}"
-                    }
-                try:
-                    receiver_id = supabase.table("jobs").select("user_id").eq("id", job_id).single().execute()
-                    await sendNotification(user_id, receiver_id.data["user_id"], content, category)
-                    print(f"DEBUG - Notification sent to employer {receiver_id.data['user_id']}")
-                except Exception as e:
-                    return {
-                        "Status": "Error",
-                        "Message": "Error storing notification",
-                        "Details": f"{e}"
-                    }
-                    
+                
                 return{
-                    "Status": "Successfull",
-                    "Message": f"You applied to job {job_id}",
-                    "Details": insert_job_appliead.data,
-                }
+                        "Status": "Successfull",
+                        "Message": f"You applied to job {job_id}",
+                        "Details": insert_job_appliead.data,
+                    }
             else:
                 return {
                     "Status": "Error",

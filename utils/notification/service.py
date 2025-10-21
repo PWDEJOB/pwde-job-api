@@ -16,13 +16,11 @@ async def sendNotification(user_id: str, receiver_id: str, content: str, categor
     category = str(category)
 
     #employer notifs categories
+    
+    #employee notifs categories
     if category == "new_applicant":
         title = "You have a new applicant"
     elif category == "message":
-        title = "You have a new message"
-    
-    #employee notifs categories
-    if category == "message":
         title = "You have a new message"
     elif category == "job_application_accepted":
         title = "Your job application has been accepted"
