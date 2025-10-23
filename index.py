@@ -2402,9 +2402,41 @@ async def updatePwdIdFront(request: Request, file: UploadFile = File(...)):
                 "Message": "File size exceeds 5MB limit"
             }
         
-        # Upload the file to the supabase storage
-        file_path = f"pwdidfront/{auth_userID}/{file.filename}"
-        supabase.storage.from_("pwdidfront").upload(file_path, file_content)
+        # Determine content type based on file extension
+        filename_lower = file.filename.lower()
+        if filename_lower.endswith(('.jpg', '.jpeg')):
+            content_type = "image/jpeg"
+        elif filename_lower.endswith('.png'):
+            content_type = "image/png"
+        else:
+            content_type = "image/jpeg"  # default fallback
+        
+        # Upload the file to the supabase storage with upsert to allow overwriting
+        file_path = f"pwdidfront/{auth_userID}/front_document"
+        try:
+            upload_result = supabase.storage.from_("pwdidfront").upload(
+                file_path,
+                file_content,
+                {
+                    "content-type": content_type,
+                    "upsert": True,  # Use boolean instead of string
+                },
+            )
+        except Exception as upsert_error:
+            # Try removing existing file first, then upload
+            try:
+                supabase.storage.from_("pwdidfront").remove([file_path])
+            except:
+                pass  # File might not exist, that's fine
+            
+            upload_result = supabase.storage.from_("pwdidfront").upload(
+                file_path,
+                file_content,
+                {
+                    "content-type": content_type,
+                },
+            )
+        
         file_url = supabase.storage.from_("pwdidfront").get_public_url(file_path)
         
         # Update the employee's profile with the document URL
@@ -2414,7 +2446,7 @@ async def updatePwdIdFront(request: Request, file: UploadFile = File(...)):
             return {
                 "Status": "Success",
                 "Message": "PWD ID front updated successfully",
-                "Details": update_pwd_id_front.data
+                "DocumentURL": file_url
             }
         else:
             return {
@@ -2452,9 +2484,41 @@ async def updatePwdIdBack(request: Request, file: UploadFile = File(...)):
                 "Message": "File size exceeds 5MB limit"
             }
         
-        # Upload the file to the supabase storage
-        file_path = f"pwdidback/{auth_userID}/{file.filename}"
-        supabase.storage.from_("pwdidback").upload(file_path, file_content)
+        # Determine content type based on file extension
+        filename_lower = file.filename.lower()
+        if filename_lower.endswith(('.jpg', '.jpeg')):
+            content_type = "image/jpeg"
+        elif filename_lower.endswith('.png'):
+            content_type = "image/png"
+        else:
+            content_type = "image/jpeg"  # default fallback
+        
+        # Upload the file to the supabase storage with upsert to allow overwriting
+        file_path = f"pwdidback/{auth_userID}/back_document"
+        try:
+            upload_result = supabase.storage.from_("pwdidback").upload(
+                file_path,
+                file_content,
+                {
+                    "content-type": content_type,
+                    "upsert": True,  # Use boolean instead of string
+                },
+            )
+        except Exception as upsert_error:
+            # Try removing existing file first, then upload
+            try:
+                supabase.storage.from_("pwdidback").remove([file_path])
+            except:
+                pass  # File might not exist, that's fine
+            
+            upload_result = supabase.storage.from_("pwdidback").upload(
+                file_path,
+                file_content,
+                {
+                    "content-type": content_type,
+                },
+            )
+        
         file_url = supabase.storage.from_("pwdidback").get_public_url(file_path)
         
         # Update the employee's profile with the document URL
@@ -2464,7 +2528,7 @@ async def updatePwdIdBack(request: Request, file: UploadFile = File(...)):
             return {
                 "Status": "Success",
                 "Message": "PWD ID back updated successfully",
-                "Details": update_pwd_id_back.data
+                "DocumentURL": file_url
             }
         else:
             return {
