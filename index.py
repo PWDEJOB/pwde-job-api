@@ -2385,45 +2385,43 @@ async def updatePwdIdFront(request: Request, file: UploadFile = File(...)):
         auth_userID = await getAuthUserIdFromRequest(request)
         supabase = getSupabaseServiceClient()
         
-    except Exception as e:
-        return {
-            "Status": "Error",
-            "Message": "Internal Server Error",
-            "Details": str(e)
-        }
-    
-    try:
-        # take an o
+        # Validate file type
         if not file.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
             return {
                 "Status": "Error",
                 "Message": "Only JPG, JPEG, PNG files are allowed"
             }
-        if len(file.content) > 5 * 1024 * 1024:
+        
+        # Read file content first
+        file_content = await file.read()
+        
+        # Validate file size (5MB limit)
+        if len(file_content) > 5 * 1024 * 1024:
             return {
                 "Status": "Error",
                 "Message": "File size exceeds 5MB limit"
             }
-        try:
-        # upload the file to the supabase storage
-            file_content = await file.read()
-            file_path = f"pwdidfront/{auth_userID}/{file.filename}"
-            supabase.storage.from_("pwdidfront").upload(file_path, file_content)
-            file_url = supabase.storage.from_("pwdidfront").get_public_url(file_path)
-        except Exception as e:
-            return {
-                "Status": "Error",
-                "Message": "Failed to upload file to storage",
-                "Details": str(e)
-            }
-        # update the employee's profile with the document URL
+        
+        # Upload the file to the supabase storage
+        file_path = f"pwdidfront/{auth_userID}/{file.filename}"
+        supabase.storage.from_("pwdidfront").upload(file_path, file_content)
+        file_url = supabase.storage.from_("pwdidfront").get_public_url(file_path)
+        
+        # Update the employee's profile with the document URL
         update_pwd_id_front = supabase.table("employee").update({"pwd_id_front_url": file_url}).eq("user_id", auth_userID).execute()
+        
         if update_pwd_id_front.data:
             return {
                 "Status": "Success",
                 "Message": "PWD ID front updated successfully",
                 "Details": update_pwd_id_front.data
             }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "Failed to update profile"
+            }
+            
     except Exception as e:
         return {
             "Status": "Error",
@@ -2437,42 +2435,43 @@ async def updatePwdIdBack(request: Request, file: UploadFile = File(...)):
         auth_userID = await getAuthUserIdFromRequest(request)
         supabase = getSupabaseServiceClient()
         
-    except Exception as e:
-        return {
-            "Status": "Error",
-            "Message": "Internal Server Error",
-            "Details": str(e)
-        }
-    try:
+        # Validate file type
         if not file.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
             return {
                 "Status": "Error",
                 "Message": "Only JPG, JPEG, PNG files are allowed"
             }
-        if len(file.content) > 5 * 1024 * 1024:
+        
+        # Read file content first
+        file_content = await file.read()
+        
+        # Validate file size (5MB limit)
+        if len(file_content) > 5 * 1024 * 1024:
             return {
                 "Status": "Error",
                 "Message": "File size exceeds 5MB limit"
             }
-        try:
-            file_content = await file.read()
-            file_path = f"pwdidback/{auth_userID}/{file.filename}"
-            supabase.storage.from_("pwdidback").upload(file_path, file_content)
-            file_url = supabase.storage.from_("pwdidback").get_public_url(file_path)
-        except Exception as e:
-            return {
-                "Status": "Error",
-                "Message": "Failed to upload file to storage",
-                "Details": str(e)
-            }
-        # update the employee's profile with the document URL
+        
+        # Upload the file to the supabase storage
+        file_path = f"pwdidback/{auth_userID}/{file.filename}"
+        supabase.storage.from_("pwdidback").upload(file_path, file_content)
+        file_url = supabase.storage.from_("pwdidback").get_public_url(file_path)
+        
+        # Update the employee's profile with the document URL
         update_pwd_id_back = supabase.table("employee").update({"pwd_id_back_url": file_url}).eq("user_id", auth_userID).execute()
+        
         if update_pwd_id_back.data:
             return {
                 "Status": "Success",
                 "Message": "PWD ID back updated successfully",
                 "Details": update_pwd_id_back.data
             }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "Failed to update profile"
+            }
+            
     except Exception as e:
         return {
             "Status": "Error",
