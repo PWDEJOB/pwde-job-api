@@ -2385,7 +2385,7 @@ async def updatePwdIdFront(request: Request, file: UploadFile = File(...)):
         auth_userID = await getAuthUserIdFromRequest(request)
         supabase = getSupabaseServiceClient()
         
-        except Exception as e:
+    except Exception as e:
         return {
             "Status": "Error",
             "Message": "Internal Server Error",
