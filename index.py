@@ -36,24 +36,6 @@ service_key = os.getenv("SUPABASE_SERVICE_KEY")
 async def root ():
     return {"message":"working"}
 
-@app.post("/test-upload")
-async def testUpload(file: UploadFile = File(...)):
-    """Test endpoint to verify file uploads work without authentication"""
-    try:
-        return {
-            "Status": "Success",
-            "Message": "Test upload successful",
-            "Filename": file.filename,
-            "ContentType": file.content_type,
-            "Size": len(await file.read())
-        }
-    except Exception as e:
-        return {
-            "Status": "Error",
-            "Message": "Test upload failed",
-            "Details": str(e)
-        }
-
 
 @app.get("/preload")
 async def preload(request: Request):
@@ -1954,13 +1936,9 @@ async def uploadResume(request: Request, file: UploadFile = File(...)):
 #uplaod other required documents
 @app.post("/upload-sss")
 async def uploadSSS(request: Request, file: UploadFile = File(...)):
-    print("🔍 SSS Upload endpoint reached!")
-    print(f"🔍 Request headers: {dict(request.headers)}")
-    print(f"🔍 File info: {file.filename}, {file.content_type}")
-    
     try:
         # Debug logging
-        print(f"🔍 SSS Upload Debug - Filename: {file.filename}, Content-Type: {file.content_type}")
+        # print(f"🔍 SSS Upload Debug - Filename: {file.filename}, Content-Type: {file.content_type}")
         
         # Validate file type
         if not file.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
@@ -2403,13 +2381,8 @@ async def getDocuments(request: Request, user_id: str = None):
 
 @app.post("/update-pwd-id-front")
 async def updatePwdIdFront(request: Request, file: UploadFile = File(...)):
-    print("🔍 PWD ID Front endpoint reached!")
-    print(f"🔍 Request headers: {dict(request.headers)}")
-    print(f"🔍 File info: {file.filename}, {file.content_type}")
-    
     try:
         auth_userID = await getAuthUserIdFromRequest(request)
-        print(f"🔍 Auth user ID: {auth_userID}")
         supabase = getSupabaseServiceClient()
         
         # Validate file type
