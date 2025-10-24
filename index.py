@@ -301,8 +301,21 @@ async def signUp(
 
         
         try:
+            data_to_be_inserted = {
+                "user_id": response.user.id,
+                "full_name": preporcessed_name,
+                "address": address,
+                "phone_number": phone_number,
+                "short_bio": short_bio,
+                "disability": disability,
+                "skills": skills,
+                "resume_url": resume_url,
+                "profile_pic_url": profile_pic_url,
+                "pwd_id_front_url": pwd_id_front_url,
+                "pwd_id_back_url": pwd_id_back_url
+                }
             # Insert all data into the database
-            insert_data = supabase_insert.table("employee").insert(user_data).execute()
+            insert_data = supabase_insert.table("employee").insert(data_to_be_inserted).execute()
             return {
                 "Status": "Successfull",
                 "Message": f"{full_name} has been successfully signed up",
