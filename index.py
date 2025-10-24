@@ -307,6 +307,8 @@ async def signUp(
                 "address": address,
                 "phone_number": phone_number,
                 "short_bio": short_bio,
+                "role": role,
+                "email": email,
                 "disability": disability,
                 "skills": skills,
                 "resume_url": resume_url,
