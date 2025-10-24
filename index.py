@@ -3558,26 +3558,30 @@ async def verify_pwd_id(user_id: str):
             # Initialize Groq client
             client = Groq()
 
-            # Call Groq API for image analysis
-            groq_response = client.chat.completions.create(
-                model="meta-llama/llama-4-scout-17b-16e-instruct",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": "You are a PWD ID verification system. Analyze this PWD (Person with Disability) identification card image and extract ONLY the PWD ID number and the person's name.\n\nIMPORTANT: You must respond in EXACTLY this format with nothing else:\nPWD ID Number: [number], Name: [full name]\n\nIf you cannot find both the PWD ID number and name clearly in the image, respond with EXACTLY:\nNo number or name found in the image.\n\nDo not include any explanations, descriptions, or additional text. Only the required format."
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"{pwde_id_front}"
+            # Call Groq API for image analysis - run in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            groq_response = await loop.run_in_executor(
+                None, 
+                lambda: client.chat.completions.create(
+                    model="meta-llama/llama-4-scout-17b-16e-instruct",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "You are a PWD ID verification system. Analyze this PWD (Person with Disability) identification card image and extract ONLY the PWD ID number and the person's name.\n\nIMPORTANT: You must respond in EXACTLY this format with nothing else:\nPWD ID Number: [number], Name: [full name]\n\nIf you cannot find both the PWD ID number and name clearly in the image, respond with EXACTLY:\nNo number or name found in the image.\n\nDo not include any explanations, descriptions, or additional text. Only the required format."
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"{pwde_id_front}"
+                                    }
                                 }
-                            }
-                        ]
-                    }
-                ]
+                            ]
+                        }
+                    ]
+                )
             )
         except Exception as e:
             return {
@@ -3681,8 +3685,14 @@ async def verify_pwd_id(user_id: str):
         # Verify against pwd_people table
         try:
             verification_response = supabase.table("pwd_people").select("*").eq("pwd_number", pwd_id_number).eq("id_owner_name", name).execute()
+
+            # verify if the name match as the user's full name
+
+            preporcessed_name = name.upper()
+
+            against_user = supabase.table("employee").select("*").eq("full_name", preporcessed_name).execute()
             
-            if verification_response.data:
+            if verification_response.data and against_user.data:
 
                 #update the employee "is_verified" to true
                 supabase.table("employee").update({"is_verified": True}).eq("user_id", user_id).execute()
