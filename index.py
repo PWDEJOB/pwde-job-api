@@ -108,15 +108,15 @@ async def signUp(
     full_name: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
-    address: str = Form(None),
-    phone_number: str = Form(None),
-    short_bio: str = Form(None),
-    disability: str = Form(None),
-    skills: str = Form(None),
-    resume: UploadFile = File(None),
-    profile_pic: UploadFile = File(None),
-    pwd_id_front: UploadFile = File(None),
-    pwd_id_back: UploadFile = File(None)
+    address: str = Form(...),
+    phone_number: str = Form(...),
+    short_bio: str = Form(...),
+    disability: str = Form(...),
+    skills: str = Form(...),
+    resume: UploadFile = File(...),
+    profile_pic: UploadFile = File(...),
+    pwd_id_front: UploadFile = File(...),
+    pwd_id_back: UploadFile = File(...)
 ):
     role = "employee"
     # Prevent duplicate email registrations in employee table
