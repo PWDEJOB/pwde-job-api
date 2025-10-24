@@ -148,11 +148,12 @@ async def signUp(
             "Message": "User creation failed - no user ID returned"
         }
     try:
+        preporcessed_name = full_name.upper()
         # Second step: Insert initial user data
         supabase_insert = getSupabaseServiceClient()
         user_data = {
             "user_id": response.user.id,
-            "full_name": full_name,
+            "full_name": preporcessed_name,
             "email": email,
             "role": role 
         }
@@ -3687,10 +3688,7 @@ async def verify_pwd_id(user_id: str):
             verification_response = supabase.table("pwd_people").select("*").eq("pwd_number", pwd_id_number).eq("id_owner_name", name).execute()
 
             # verify if the name match as the user's full name
-
-            preporcessed_name = name.upper()
-
-            against_user = supabase.table("employee").select("*").eq("full_name", preporcessed_name).execute()
+            against_user = supabase.table("employee").select("*").eq("full_name", name).execute()
             
             if verification_response.data and against_user.data:
 
