@@ -1602,6 +1602,84 @@ async def viewAllApplicantsInJobListing(request: Request, job_id: str):
             "Details": f"{e}"
         }
 
+#view all employer applicants
+@app.get("/view-all-employer-applicants/{user_id}")
+async def viewAllEmployerApplicants(user_id: str):
+    try:
+        # auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseClient()
+        
+        # check_user = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
+        
+        # if check_user.data and check_user.data["user_id"] == auth_userID:
+            # Join job_applications with jobs table to get applicants for this employer's jobs
+        get_all_applicants = supabase.table("job_applications").select("""
+            *,
+            jobs!inner(
+                id,
+                title,
+                job_description,
+                skill_1,
+                skill_2,
+                skill_3,
+                user_id
+            )
+        """).eq("jobs.user_id", user_id).execute()
+            
+        if get_all_applicants.data:
+            return {
+                "Status": "Successfull",
+                "Applicants": get_all_applicants.data
+            }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "No Applicants"
+            }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+
+
+#get updated employee info
+@app.get("/get-employee-info/{user_id}")
+async def getEmployeeInfo(user_id: str):
+    try:
+        supabase = getSupabaseClient()
+        
+        get_employee_info = supabase.table("employee").select("full_name, disability, skills, address, phone_number, short_bio, resume_url, profile_pic_url, pwd_id_front_url, pwd_id_back_url").eq("user_id", user_id).single().execute()
+            
+        if get_employee_info.data:
+                return {
+                    "Status": "Successfull",
+                    "Full Name": get_employee_info.data["full_name"],
+                    "Disability": get_employee_info.data["disability"],
+                    "Skills": get_employee_info.data["skills"],
+                    "Address": get_employee_info.data["address"],
+                    "Phone Number": get_employee_info.data["phone_number"],
+                    "Short Bio": get_employee_info.data["short_bio"],
+                    "Resume URL": get_employee_info.data["resume_url"],
+                    "Profile Pic URL": get_employee_info.data["profile_pic_url"],
+                    "PWD ID Front URL": get_employee_info.data["pwd_id_front_url"],
+                    "PWD ID Back URL": get_employee_info.data["pwd_id_back_url"]
+                }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "User not found"
+            }
+
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+
+#get updated employer info
 @app.post("/logout")
 async def logout(request: Request):
     # Debug: Print all headers
