@@ -1650,7 +1650,7 @@ async def getEmployeeInfo(user_id: str):
     try:
         supabase = getSupabaseClient()
         
-        get_employee_info = supabase.table("employee").select("full_name, disability, skills, address, phone_number, short_bio, resume_url, profile_pic_url, pwd_id_front_url, pwd_id_back_url").eq("user_id", user_id).single().execute()
+        get_employee_info = supabase.table("employee").select("full_name, disability, skills, address, phone_number, short_bio, resume_url, profile_pic_url, pwd_id_front_url, pwd_id_back_url, is_verified").eq("user_id", user_id).single().execute()
             
         if get_employee_info.data:
                 return {
@@ -1664,7 +1664,8 @@ async def getEmployeeInfo(user_id: str):
                     "Resume URL": get_employee_info.data["resume_url"],
                     "Profile Pic URL": get_employee_info.data["profile_pic_url"],
                     "PWD ID Front URL": get_employee_info.data["pwd_id_front_url"],
-                    "PWD ID Back URL": get_employee_info.data["pwd_id_back_url"]
+                    "PWD ID Back URL": get_employee_info.data["pwd_id_back_url"],
+                    "Verification Status": get_employee_info.data["is_verified"]
                 }
         else:
             return {
