@@ -3832,3 +3832,75 @@ async def verify_pwd_id(user_id: str):
             "Message": "PWD ID verification process failed",
             "Details": f"Unexpected error: {e}"
         }
+
+
+# extract id number (for manual verification for employers) from the pwd id image
+@app.get("/extract-id-number/{user_id}")
+async def extract_id_number(user_id: str):
+    try:
+        supabase = getSupabaseServiceClient()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    try:
+        # Get the user's PWD ID image
+        response = supabase.table("employee").select("pwd_id_front_url").eq("user_id", user_id).execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    # groq api to extract the id number from the image
+    try:
+        client = Groq()
+        loop = asyncio.get_event_loop()
+        groq_response = await loop.run_in_executor(
+            None, 
+            lambda: client.chat.completions.create(
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Extract the ID number from the image. Only respond with the ID number and nothing else. For example: PWD ID Number: 1234567890"
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"{response.data[0]['pwd_id_front_url']}"
+                                }
+                            }
+                        ]
+                    }
+                ])
+        )
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Groq API error",
+            "Details": f"{e}"
+        }
+    
+    # check if the groq response is valid
+    if not groq_response or not groq_response.choices or not groq_response.choices[0].message.content:
+        return {
+            "Status": "Error",
+            "Message": "Invalid response from Groq API",
+            "Details": "No response from Groq API"
+        }
+    
+    # extract the id number from the groq response
+    id_number = groq_response.choices[0].message.content.strip()
+    
+    return {
+        "Status": "Success",
+        "Result": id_number
+    }
