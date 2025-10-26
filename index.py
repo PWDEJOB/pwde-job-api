@@ -1271,7 +1271,7 @@ async def deleteJob(request: Request, id: str):
                 "Message": "Error deleting messages between employer and applicant",
                 "Details": f"{e}"
             }
-        # it ahve data in declined_jobs table
+        # Delete declined jobs if they exist
         search_declined_jobs = supabase.table("declined_jobs").select("job_id").eq("job_id", id).execute()
         if search_declined_jobs.data:
             try:
@@ -1282,28 +1282,28 @@ async def deleteJob(request: Request, id: str):
                     "Message": "Error deleting declined job",
                     "Details": f"{e}"
                 }
-        else:
-        # Finally delete the job itself
-            try:
-                delete_job = supabase.table("jobs").delete().eq("id", id).execute()
-                
-                if delete_job.data:  # check if any row was actually deleted
-                    return {
-                        "Status": "Success",
-                        "Message": f"Job {id} and all related data deleted successfully"
-                    }
-                else:
-                    return {
-                        "Status": "Error",
-                        "Message": f"Failed to delete job {id}",
-                        "Details": f"{delete_job}"
-                    }
-            except Exception as e:
+
+        # Finally delete the job itself (regardless of declined jobs)
+        try:
+            delete_job = supabase.table("jobs").delete().eq("id", id).execute()
+            
+            if delete_job.data:  # check if any row was actually deleted
+                return {
+                    "Status": "Success",
+                    "Message": f"Job {id} and all related data deleted successfully"
+                }
+            else:
                 return {
                     "Status": "Error",
-                    "Message": "Error deleting job",
-                    "Details": f"{e}"
+                    "Message": f"Failed to delete job {id}",
+                    "Details": f"{delete_job}"
                 }
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Error deleting job",
+                "Details": f"{e}"
+            }
 
     except Exception as e:
         return {
