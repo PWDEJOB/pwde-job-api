@@ -1370,10 +1370,10 @@ async def updateSpecificJob(request: Request, id: str, job: updateJob):
 #MAIN ALGO WORKS (Content absed filtering + collaborative filtering)
 
 @app.get("/reco-jobs")
-async def reccomendJobs(auth_userID: str):
+async def reccomendJobs(request: Request):
     try:
         # Get the user details
-        # auth_userID = await getAuthUserIdFromRequest(request)
+        auth_userID = await getAuthUserIdFromRequest(request)
         supabase = getSupabaseClient()
 
         # Fetch the user details
