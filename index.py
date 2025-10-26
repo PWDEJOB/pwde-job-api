@@ -1271,28 +1271,39 @@ async def deleteJob(request: Request, id: str):
                 "Message": "Error deleting messages between employer and applicant",
                 "Details": f"{e}"
             }
-
-        # Finally delete the job itself
-        try:
-            delete_job = supabase.table("jobs").delete().eq("id", id).execute()
-            
-            if delete_job.data:  # check if any row was actually deleted
-                return {
-                    "Status": "Success",
-                    "Message": f"Job {id} and all related data deleted successfully"
-                }
-            else:
+        # it ahve data in declined_jobs table
+        search_declined_jobs = supabase.table("declined_jobs").select("job_id").eq("job_id", id).execute()
+        if search_declined_jobs.data:
+            try:
+                delete_declined_job = supabase.table("declined_jobs").delete().eq("job_id", id).execute()
+            except Exception as e:
                 return {
                     "Status": "Error",
-                    "Message": f"Failed to delete job {id}",
-                    "Details": f"{delete_job}"
+                    "Message": "Error deleting declined job",
+                    "Details": f"{e}"
                 }
-        except Exception as e:
-            return {
-                "Status": "Error",
-                "Message": "Error deleting job",
-                "Details": f"{e}"
-            }
+        else:
+        # Finally delete the job itself
+            try:
+                delete_job = supabase.table("jobs").delete().eq("id", id).execute()
+                
+                if delete_job.data:  # check if any row was actually deleted
+                    return {
+                        "Status": "Success",
+                        "Message": f"Job {id} and all related data deleted successfully"
+                    }
+                else:
+                    return {
+                        "Status": "Error",
+                        "Message": f"Failed to delete job {id}",
+                        "Details": f"{delete_job}"
+                    }
+            except Exception as e:
+                return {
+                    "Status": "Error",
+                    "Message": "Error deleting job",
+                    "Details": f"{e}"
+                }
 
     except Exception as e:
         return {
@@ -1359,10 +1370,10 @@ async def updateSpecificJob(request: Request, id: str, job: updateJob):
 #MAIN ALGO WORKS (Content absed filtering + collaborative filtering)
 
 @app.get("/reco-jobs")
-async def reccomendJobs(request: Request):
+async def reccomendJobs(auth_userID: str):
     try:
         # Get the user details
-        auth_userID = await getAuthUserIdFromRequest(request)
+        # auth_userID = await getAuthUserIdFromRequest(request)
         supabase = getSupabaseClient()
 
         # Fetch the user details
@@ -1392,6 +1403,9 @@ async def reccomendJobs(request: Request):
         # Recommendations
 
         recommendations = await calculateJobMatchScore(user_skills_set, jobs_data)
+
+        #remove jobs that are lower than 0.4 
+        recommendations = [job for job in recommendations if job["skill_match_score"] >= 0.4]
                 
         # Sort and return top 5 recommendations
         recommendations.sort(key=lambda x: x["skill_match_score"], reverse=True)
