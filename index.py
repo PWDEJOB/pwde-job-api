@@ -1395,7 +1395,7 @@ async def reccomendJobs(request: Request):
         # Convert set to list for indexing
         user_skills_list = list(user_skills_set)
 
-        # Fetch jobs - use a more flexible approach since we don't know which skills match
+        # Fetch jobs
         # First, get all PWD-friendly jobs
         jobs_response = supabase.table("jobs").select("*").eq("pwd_friendly", True).execute()
         jobs_data = jobs_response.data or []
@@ -3904,3 +3904,30 @@ async def extract_id_number(user_id: str):
         "Status": "Success",
         "Result": id_number
     }
+
+@app.get("/employer-info/{user_id}")
+async def getEmployerInfo(user_id: str):
+    try:
+        supabase = getSupabaseServiceClient()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    try:
+        response = supabase.table("employers").select("*").eq("user_id", user_id).execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
+    if response.data:
+        return {
+            "Status": "Success",
+            "Message": "Employer info fetched successfully",
+            "Data": response.data
+        }
