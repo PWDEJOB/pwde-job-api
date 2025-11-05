@@ -2673,22 +2673,35 @@ async def updateApplicationStatus(request : Request, application_id: str, new_st
         check_user = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
         
         if check_user.data and check_user.data["user_id"] == auth_userID:
-            status_to_be_changed = supabase.table("job_applications").update({
-                "status": new_status
-            }).eq("id", application_id).execute()
-            
-            #send notification to the applicant
-            user_id = auth_userID
+            # Get application details first to get user_id
             try:
                 receiver_id = supabase.table("job_applications").select("user_id").eq("id", application_id).single().execute()
                 job_id = supabase.table("job_applications").select("job_id").eq("id", application_id).single().execute()
                 job_title = supabase.table("jobs").select("title").eq("id", job_id.data["job_id"]).single().execute()
+                applicant_user_id = receiver_id.data["user_id"]
             except Exception as e:
                 return {
                     "Status": "Error",
                     "Message": "Error getting details",
                     "Details": f"{e}"
                 }
+            
+            # Update the current application status
+            status_to_be_changed = supabase.table("job_applications").update({
+                "status": new_status
+            }).eq("id", application_id).execute()
+            
+            # If status is being set to "accepted" (hired), reject all other applications from this user
+            if new_status == "accepted":
+                try:
+                    reject_others = supabase.table("job_applications").update({"status": "rejected"}).eq("user_id", applicant_user_id).neq("id", application_id).execute()
+                    print(f"✅ Rejected {len(reject_others.data) if reject_others.data else 0} other applications for user {applicant_user_id}")
+                except Exception as e:
+                    # Log error but don't fail the operation
+                    print(f"⚠️ Warning: Error rejecting other applications: {e}")
+            
+            #send notification to the applicant
+            user_id = auth_userID
             
             if new_status == "accepted":
                 category = "job_application_accepted"
@@ -3930,4 +3943,114 @@ async def getEmployerInfo(user_id: str):
             "Status": "Success",
             "Message": "Employer info fetched successfully",
             "Data": response.data
+        }
+
+@app.post("/rejecting-previous-application/{application_id}")
+async def rejectingPreviousApplication(application_id: str, request: Request):
+    """
+    Mark a specific application as 'accepted' (hired) and reject all other applications from that user.
+    This endpoint is used by employers when they hire a candidate.
+    """
+    try:
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
+        
+        # Check if the user is an employer
+        check_user = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
+        
+        if not check_user.data or check_user.data["user_id"] != auth_userID:
+            return {
+                "Status": "Error",
+                "Message": "Unauthorized: Only employers can perform this action"
+            }
+        
+        # Get the application details to find the user_id
+        try:
+            application = supabase.table("job_applications").select("user_id, job_id").eq("id", application_id).single().execute()
+            if not application.data:
+                return {
+                    "Status": "Error",
+                    "Message": "Application not found"
+                }
+            user_id = application.data["user_id"]
+            job_id = application.data["job_id"]
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Error fetching application details",
+                "Details": f"{e}"
+            }
+        
+        # Mark the current application as 'accepted' (hired)
+        try:
+            update_current = supabase.table("job_applications").update({"status": "accepted"}).eq("id", application_id).execute()
+            if not update_current.data:
+                return {
+                    "Status": "Error",
+                    "Message": "Failed to update application status"
+                }
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Error updating application status",
+                "Details": f"{e}"
+            }
+        
+        # Reject all other applications from this user (except the one we just accepted)
+        try:
+            reject_others = supabase.table("job_applications").update({"status": "rejected"}).eq("user_id", user_id).neq("id", application_id).execute()
+        except Exception as e:
+            return {
+                "Status": "Error",
+                "Message": "Error rejecting other applications",
+                "Details": f"{e}"
+            }
+        
+        # Send notification to the applicant
+        try:
+            job_title = supabase.table("jobs").select("title").eq("id", job_id).single().execute()
+            category = "job_application_accepted"
+            content = f"Your application at {job_title.data['title']} has been accepted"
+            
+            # Send notification
+            await sendNotification(auth_userID, user_id, content, category)
+            
+            # Send push notification
+            async def send_hire_push_notification():
+                try:
+                    push_token = await getUserPushToken(user_id)
+                    if push_token:
+                        notification_content = getJobStatusNotificationContent("accepted", job_title.data['title'])
+                        await sendPushNotification(
+                            expo_token=push_token,
+                            title=notification_content["title"],
+                            body=notification_content["body"],
+                            data={
+                                "type": "job_application_status",
+                                "status": "accepted",
+                                "job_title": job_title.data['title'],
+                                "application_id": application_id,
+                                "timestamp": datetime.now().isoformat()
+                            }
+                        )
+                except Exception as e:
+                    print(f"❌ Error sending push notification: {str(e)}")
+            
+            asyncio.create_task(send_hire_push_notification())
+        except Exception as e:
+            # Don't fail the whole operation if notification fails
+            print(f"Warning: Error sending notification: {e}")
+        
+        return {
+            "Status": "Success",
+            "Message": "Application marked as hired and other applications rejected successfully",
+            "AcceptedApplicationId": application_id,
+            "RejectedApplicationsCount": len(reject_others.data) if reject_others.data else 0
+        }
+        
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
         }
