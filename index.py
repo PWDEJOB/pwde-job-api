@@ -3900,43 +3900,29 @@ async def verify_pwd_id_local(
             "Details": f"{e}"
         }
     
-    # Upload front image temporarily to Supabase storage to get a URL for Groq API
+    # Convert image to base64 for Groq API (more reliable than URL fetching)
     try:
-        # Create a temporary path with timestamp
-        import uuid
-        temp_id = str(uuid.uuid4())
-        temp_front_path = f"temp-verification/{temp_id}/front_{pwd_id_front.filename}"
-        
-        # Determine content type
+        # Determine content type and mime type for base64 data URL
         filename_lower = pwd_id_front.filename.lower()
         if filename_lower.endswith(('.jpg', '.jpeg')):
-            content_type = "image/jpeg"
+            mime_type = "image/jpeg"
         elif filename_lower.endswith('.png'):
-            content_type = "image/png"
+            mime_type = "image/png"
         else:
-            content_type = "image/jpeg"
+            mime_type = "image/jpeg"
         
-        # Upload to Supabase storage
-        supabase.storage.from_("pwd-ids").upload(
-            temp_front_path,
-            front_image_content,
-            {
-                "content-type": content_type,
-                "upsert": "true",
-            },
-        )
-        
-        # Get public URL
-        front_image_url = supabase.storage.from_("pwd-ids").get_public_url(temp_front_path)
+        # Encode image to base64 (base64 is already imported at top)
+        front_image_base64 = base64.b64encode(front_image_content).decode('utf-8')
+        front_image_data_url = f"data:{mime_type};base64,{front_image_base64}"
         
     except Exception as e:
         return {
             "Status": "Error",
-            "Message": "Failed to upload image for processing",
+            "Message": "Failed to process image for analysis",
             "Details": f"{e}"
         }
     
-    # Use Groq API to extract PWD ID number and name from front image
+    # Use Groq API to extract PWD ID number and name from front image using base64
     try:
         client = Groq()
         loop = asyncio.get_event_loop()
@@ -3955,7 +3941,7 @@ async def verify_pwd_id_local(
                             {
                                 "type": "image_url",
                                 "image_url": {
-                                    "url": front_image_url
+                                    "url": front_image_data_url
                                 }
                             }
                         ]
@@ -3964,11 +3950,6 @@ async def verify_pwd_id_local(
             )
         )
     except Exception as e:
-        # Clean up temporary file
-        try:
-            supabase.storage.from_("pwd-ids").remove([temp_front_path])
-        except:
-            pass
         return {
             "Status": "Error",
             "Message": "Image analysis failed",
@@ -3977,11 +3958,6 @@ async def verify_pwd_id_local(
     
     # Check if Groq response is valid
     if not groq_response or not groq_response.choices or not groq_response.choices[0].message.content:
-        # Clean up temporary file
-        try:
-            supabase.storage.from_("pwd-ids").remove([temp_front_path])
-        except:
-            pass
         return {
             "Status": "Error",
             "Message": "Invalid response from image analysis service"
@@ -3993,12 +3969,6 @@ async def verify_pwd_id_local(
         "full_groq_response": analysis_result,
         "expected_format": "PWD ID Number: [number], Name: [full name]"
     }
-    
-    # Clean up temporary file
-    try:
-        supabase.storage.from_("pwd-ids").remove([temp_front_path])
-    except:
-        pass
     
     if analysis_result == "No number or name found in the image.":
         return {
