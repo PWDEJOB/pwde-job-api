@@ -117,7 +117,8 @@ async def signUp(
     resume: UploadFile = File(...),
     profile_pic: UploadFile = File(...),
     pwd_id_front: UploadFile = File(...),
-    pwd_id_back: UploadFile = File(...)
+    pwd_id_back: UploadFile = File(...),
+    is_verified: bool = Form(False)
 ):
     role = "employee"
     # Prevent duplicate email registrations in employee table
@@ -170,6 +171,8 @@ async def signUp(
             user_data["disability"] = disability
         if skills:
             user_data["skills"] = skills
+        # Handle is_verified field (already a boolean from Form, defaults to False)
+        user_data["is_verified"] = is_verified
         
 
         # Handle file uploads if provided
