@@ -6,6 +6,7 @@ import ast
 from datetime import datetime
 import asyncio
 import re
+import base64
 from datetime import date
 from utils.recomendation.service import parseSkills, calculateJobMatchScore
 from utils.Oauth_other.service import limitNewUsers, checkIfEmployerExists, checkIfEmployeeExists
@@ -3846,6 +3847,278 @@ async def verify_pwd_id(user_id: str):
             "Details": f"Unexpected error: {e}"
         }
 
+# Local PWD ID verification (before signup) - accepts images directly
+@app.post("/verify-pwd-id-local")
+async def verify_pwd_id_local(
+    pwd_id_front: UploadFile = File(...),
+    pwd_id_back: UploadFile = File(None),
+    full_name: str = Form(None)
+):
+    """
+    Verify PWD ID locally using uploaded images before user signup.
+    This endpoint accepts image files directly and uses Groq API to extract
+    PWD ID number and name, then verifies against pwd_people table.
+    """
+    try:
+        supabase = getSupabaseServiceClient()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Database connection failed",
+            "Details": f"{e}"
+        }
+    
+    # Validate that front image is provided
+    if not pwd_id_front:
+        return {
+            "Status": "Error",
+            "Message": "PWD ID front image is required"
+        }
+    
+    # Validate file types
+    if not pwd_id_front.filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+        return {
+            "Status": "Error",
+            "Message": "PWD ID front image must be JPG, JPEG, or PNG"
+        }
+    
+    # Read and validate file size
+    try:
+        front_image_content = await pwd_id_front.read()
+        if len(front_image_content) > 5 * 1024 * 1024:  # 5MB limit
+            return {
+                "Status": "Error",
+                "Message": "PWD ID front image size must be less than 5MB"
+            }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Failed to read front image",
+            "Details": f"{e}"
+        }
+    
+    # Upload front image temporarily to Supabase storage to get a URL for Groq API
+    try:
+        # Create a temporary path with timestamp
+        import uuid
+        temp_id = str(uuid.uuid4())
+        temp_front_path = f"temp-verification/{temp_id}/front_{pwd_id_front.filename}"
+        
+        # Determine content type
+        filename_lower = pwd_id_front.filename.lower()
+        if filename_lower.endswith(('.jpg', '.jpeg')):
+            content_type = "image/jpeg"
+        elif filename_lower.endswith('.png'):
+            content_type = "image/png"
+        else:
+            content_type = "image/jpeg"
+        
+        # Upload to Supabase storage
+        supabase.storage.from_("pwd-ids").upload(
+            temp_front_path,
+            front_image_content,
+            {
+                "content-type": content_type,
+                "upsert": "true",
+            },
+        )
+        
+        # Get public URL
+        front_image_url = supabase.storage.from_("pwd-ids").get_public_url(temp_front_path)
+        
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Failed to upload image for processing",
+            "Details": f"{e}"
+        }
+    
+    # Use Groq API to extract PWD ID number and name from front image
+    try:
+        client = Groq()
+        loop = asyncio.get_event_loop()
+        groq_response = await loop.run_in_executor(
+            None, 
+            lambda: client.chat.completions.create(
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "You are a PWD ID verification system. Analyze this PWD (Person with Disability) identification card image and extract ONLY the PWD ID number and the person's name.\n\nIMPORTANT: You must respond in EXACTLY this format with nothing else:\nPWD ID Number: [number], Name: [full name]\n\nIf you cannot find both the PWD ID number and name clearly in the image, respond with EXACTLY:\nNo number or name found in the image.\n\nDo not include any explanations, descriptions, or additional text. Only the required format."
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": front_image_url
+                                }
+                            }
+                        ]
+                    }
+                ]
+            )
+        )
+    except Exception as e:
+        # Clean up temporary file
+        try:
+            supabase.storage.from_("pwd-ids").remove([temp_front_path])
+        except:
+            pass
+        return {
+            "Status": "Error",
+            "Message": "Image analysis failed",
+            "Details": f"Groq API error: {e}"
+        }
+    
+    # Check if Groq response is valid
+    if not groq_response or not groq_response.choices or not groq_response.choices[0].message.content:
+        # Clean up temporary file
+        try:
+            supabase.storage.from_("pwd-ids").remove([temp_front_path])
+        except:
+            pass
+        return {
+            "Status": "Error",
+            "Message": "Invalid response from image analysis service"
+        }
+    
+    analysis_result = groq_response.choices[0].message.content.strip()
+    
+    debug_info = {
+        "full_groq_response": analysis_result,
+        "expected_format": "PWD ID Number: [number], Name: [full name]"
+    }
+    
+    # Clean up temporary file
+    try:
+        supabase.storage.from_("pwd-ids").remove([temp_front_path])
+    except:
+        pass
+    
+    if analysis_result == "No number or name found in the image.":
+        return {
+            "Status": "Error",
+            "Message": "No PWD ID number or name found in the image",
+            "Details": debug_info
+        }
+    
+    # Parse the response
+    try:
+        if "," not in analysis_result or ":" not in analysis_result:
+            return {
+                "Status": "Error",
+                "Message": "Invalid format in image analysis response",
+                "Details": {
+                    **debug_info,
+                    "error": "Expected comma and colon separators not found"
+                }
+            }
+        
+        parsed_response = analysis_result.split(",")
+        if len(parsed_response) < 2:
+            return {
+                "Status": "Error",
+                "Message": "Incomplete data extracted from image",
+                "Details": {
+                    **debug_info,
+                    "error": "Could not parse both PWD ID and name - missing comma separator"
+                }
+            }
+        
+        # Extract PWD ID number
+        pwd_id_part = parsed_response[0].strip()
+        if ":" not in pwd_id_part:
+            return {
+                "Status": "Error",
+                "Message": "PWD ID number format invalid",
+                "Details": {
+                    **debug_info,
+                    "error": f"Expected 'PWD ID Number: ...' but got: '{pwd_id_part}'"
+                }
+            }
+        pwd_id_number = pwd_id_part.split(":", 1)[1].strip()
+        
+        # Extract name
+        name_part = parsed_response[1].strip()
+        if ":" not in name_part:
+            return {
+                "Status": "Error",
+                "Message": "Name format invalid",
+                "Details": {
+                    **debug_info,
+                    "error": f"Expected 'Name: ...' but got: '{name_part}'"
+                }
+            }
+        extracted_name = name_part.split(":", 1)[1].strip()
+        
+        if not pwd_id_number or not extracted_name:
+            return {
+                "Status": "Error",
+                "Message": "Empty PWD ID number or name extracted from image",
+                "Details": {
+                    **debug_info,
+                    "extracted_pwd_id": pwd_id_number,
+                    "extracted_name": extracted_name
+                }
+            }
+            
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Failed to parse image analysis results",
+            "Details": {
+                **debug_info,
+                "parsing_error": str(e)
+            }
+        }
+    
+    # Verify against pwd_people table
+    try:
+        verification_response = supabase.table("pwd_people").select("*").eq("pwd_number", pwd_id_number).eq("id_owner_name", extracted_name.upper()).execute()
+        
+        # If full_name is provided, also check if it matches
+        name_match = True
+        if full_name:
+            # Compare extracted name with provided full name (case-insensitive)
+            if extracted_name.upper() != full_name.upper():
+                name_match = False
+        
+        if verification_response.data and name_match:
+            return {
+                "Status": "Success",
+                "Message": "PWD ID verification successful",
+                "Details": {
+                    "extracted_pwd_id": pwd_id_number,
+                    "extracted_name": extracted_name,
+                    "verification_data": verification_response.data[0],
+                    "name_match": name_match
+                }
+            }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "PWD ID verification failed - no matching record found",
+                "Details": {
+                    "extracted_pwd_id": pwd_id_number,
+                    "extracted_name": extracted_name,
+                    "provided_name": full_name if full_name else None,
+                    "name_match": name_match,
+                    "database_match": bool(verification_response.data),
+                    "error": f"No record found for PWD ID: {pwd_id_number}, Name: {extracted_name}"
+                }
+            }
+            
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Database verification failed",
+            "Details": f"Error checking pwd_people table: {e}"
+        }
+    
+
+    
 
 # extract id number (for manual verification for employers) from the pwd id image
 @app.get("/extract-id-number/{user_id}")
