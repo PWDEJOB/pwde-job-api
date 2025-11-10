@@ -1143,12 +1143,14 @@ async def createJob(job: jobCreation, request: Request):
             "skill_3": job.skill_3,
             "skill_4": job.skill_4,
             "skill_5": job.skill_5,
+            "allowed_disabilities": job.allowed_disabilities,
             "pwd_friendly": job.pwd_friendly,
             "company_name": job.company_name,
             "location": job.location,
             "job_type": job.job_type,
             "industry": job.industry,
             "experience": job.experience,
+            "fixed_salary": job.fixed_salary,
             "min_salary": job.min_salary,
             "max_salary": job.max_salary
         }

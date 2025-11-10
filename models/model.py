@@ -58,7 +58,9 @@ class jobCreation(BaseModel):
     skill_3: str
     skill_4: str
     skill_5: str
+    allowed_disabilities: List[str]
     pwd_friendly: bool
+    fixed_salary: float
     min_salary: float
     max_salary: float
 
