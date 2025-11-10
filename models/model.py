@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from uuid import UUID
 from typing import Literal
@@ -60,9 +60,9 @@ class jobCreation(BaseModel):
     skill_5: str
     allowed_disabilities: List[str]
     pwd_friendly: bool
-    fixed_salary: float
-    min_salary: float
-    max_salary: float
+    fixed_salary: Optional[float] = None
+    min_salary: Optional[float] = None
+    max_salary: Optional[float] = None
 
 class updateJob(BaseModel):
     title: str
@@ -77,9 +77,11 @@ class updateJob(BaseModel):
     skill_3: str
     skill_4: str
     skill_5: str
+    allowed_disabilities: List[str]
     pwd_friendly: bool
-    min_salary: float
-    max_salary: float
+    fixed_salary: Optional[float] = None
+    min_salary: Optional[float] = None
+    max_salary: Optional[float] = None
 
 class ChatMessage(BaseModel):
     sender_id: str

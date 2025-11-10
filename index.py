@@ -1150,9 +1150,9 @@ async def createJob(job: jobCreation, request: Request):
             "job_type": job.job_type,
             "industry": job.industry,
             "experience": job.experience,
-            "fixed_salary": job.fixed_salary,
-            "min_salary": job.min_salary,
-            "max_salary": job.max_salary
+            "fixed_salary": job.fixed_salary if job.fixed_salary is not None else None,
+            "min_salary": job.min_salary if job.min_salary is not None else None,
+            "max_salary": job.max_salary if job.max_salary is not None else None
         }
         try:
             insert_response = supabase.table("jobs").insert(jobs_data).execute()
@@ -1338,14 +1338,16 @@ async def updateSpecificJob(request: Request, id: str, job: updateJob):
                 "skill_3": job.skill_3,
                 "skill_4": job.skill_4,
                 "skill_5": job.skill_5,
+                "allowed_disabilities": job.allowed_disabilities,
                 "pwd_friendly": job.pwd_friendly,
                 "company_name": job.company_name,
                 "location": job.location,
                 "job_type": job.job_type,
                 "industry": job.industry,
                 "experience": job.experience,
-                "min_salary": job.min_salary,
-                "max_salary": job.max_salary
+                "fixed_salary": job.fixed_salary if job.fixed_salary is not None else None,
+                "min_salary": job.min_salary if job.min_salary is not None else None,
+                "max_salary": job.max_salary if job.max_salary is not None else None
              }
              update_response = supabase.table("jobs").update(new_data).eq("id", id).execute()
             
