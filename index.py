@@ -4452,8 +4452,12 @@ async def getOtherDocuments(user_id: str, request: Request):
         supabase = getSupabaseServiceClient()
         
         # Check if requester is an employer (can view any user's documents)
-        check_employer = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
-        is_employer = check_employer.data and check_employer.data["user_id"] == auth_userID
+        try:
+            check_employer = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
+            is_employer = check_employer.data and check_employer.data["user_id"] == auth_userID
+        except Exception:
+            # User is not an employer, continue with employee check
+            is_employer = False
         
         # If not an employer, check if requester is viewing their own documents
         if not is_employer:
@@ -4464,8 +4468,14 @@ async def getOtherDocuments(user_id: str, request: Request):
                 }
             
             # Verify the user is an employee
-            check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
-            if not check_user.data or check_user.data["user_id"] != auth_userID:
+            try:
+                check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
+                if not check_user.data or check_user.data["user_id"] != auth_userID:
+                    return {
+                        "Status": "Error",
+                        "Message": "User not found or not authorized"
+                    }
+            except Exception:
                 return {
                     "Status": "Error",
                     "Message": "User not found or not authorized"
