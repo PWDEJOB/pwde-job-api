@@ -4416,12 +4416,21 @@ async def uploadOtherDocuments(user_id: str, request: Request, file: UploadFile 
                 "created_at": datetime.now().isoformat()
             }).execute()
 
+            # Verify the insert was successful
+            if not insert_result.data:
+                return {
+                    "Status": "Error",
+                    "Message": "Failed to save document metadata to database",
+                    "Details": "Insert operation returned no data"
+                }
+
             return {
                 "Status": "Success",
                 "Message": "Document uploaded successfully",
                 "DocumentURL": document_url,
                 "DocumentName": display_name,
-                "TotalDocuments": doc_count + 1
+                "TotalDocuments": doc_count + 1,
+                "DocumentId": insert_result.data[0].get("id") if insert_result.data else None
             }
         except Exception as storage_error:
             return {
