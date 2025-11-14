@@ -4485,4 +4485,64 @@ async def getOtherDocuments(user_id: str, request: Request):
             "Message": "Internal Server Error",
             "Details": f"{e}"
         }
+
+@app.delete("/delete-other-document/{document_id}")
+async def deleteOtherDocument(document_id: str, request: Request):
+    try:
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
+        
+        # First, get the document to verify ownership
+        document = supabase.table("other_documents").select("*").eq("id", document_id).single().execute()
+        
+        if not document.data:
+            return {
+                "Status": "Error",
+                "Message": "Document not found"
+            }
+        
+        # Verify that the authenticated user owns this document
+        if document.data["user_id"] != auth_userID:
+            return {
+                "Status": "Error",
+                "Message": "Unauthorized: You can only delete your own documents"
+            }
+        
+        # Extract the file path from the document URL or construct it
+        # The URL format should be: .../other-docs/{user_id}/{filename}
+        file_name = document.data.get("file_name")
+        if not file_name:
+            return {
+                "Status": "Error",
+                "Message": "Document file name not found"
+            }
+        
+        document_path = f"{auth_userID}/{file_name}"
+        
+        # Delete from storage
+        try:
+            supabase.storage.from_("other-docs").remove([document_path])
+        except Exception as storage_error:
+            # Log but don't fail if file doesn't exist in storage
+            print(f"Warning: Error removing file from storage: {storage_error}")
+        
+        # Delete from database
+        delete_result = supabase.table("other_documents").delete().eq("id", document_id).execute()
+        
+        if delete_result.data:
+            return {
+                "Status": "Success",
+                "Message": "Document deleted successfully"
+            }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "Failed to delete document from database"
+            }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
     
