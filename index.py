@@ -4304,3 +4304,185 @@ async def rejectingPreviousApplication(application_id: str, request: Request):
             "Message": "Internal Server Error",
             "Details": f"{e}"
         }
+
+#upload other documents
+@app.post("/upload-other-documents/{user_id}")
+async def uploadOtherDocuments(user_id: str, request: Request, file: UploadFile = File(...), document_name: str = Form(None)):
+    try:
+        # Validate file type - allow common document formats
+        allowed_extensions = ('.pdf', '.jpg', '.jpeg', '.png', '.doc', '.docx')
+        if not file.filename.lower().endswith(allowed_extensions):
+            return {
+                "Status": "Error",
+                "Message": f"Only {', '.join(allowed_extensions).upper()} files are allowed"
+            }
+
+        # Read file content
+        file_content = await file.read()
+        
+        # Validate file size (5MB limit)
+        if len(file_content) > 5 * 1024 * 1024:  # 5MB in bytes
+            return {
+                "Status": "Error",
+                "Message": "File size exceeds 5MB limit"
+            }
+        
+        # Determine content type based on file extension
+        filename_lower = file.filename.lower()
+        if filename_lower.endswith('.pdf'):
+            content_type = "application/pdf"
+        elif filename_lower.endswith(('.jpg', '.jpeg')):
+            content_type = "image/jpeg"
+        elif filename_lower.endswith('.png'):
+            content_type = "image/png"
+        elif filename_lower.endswith('.doc'):
+            content_type = "application/msword"
+        elif filename_lower.endswith('.docx'):
+            content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        else:
+            content_type = "application/octet-stream"  # default fallback
+        
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
+        
+        # Verify that the authenticated user matches the user_id in the path
+        if auth_userID != user_id:
+            return {
+                "Status": "Error",
+                "Message": "Unauthorized: You can only upload documents for your own account"
+            }
+        
+        # Check if the user is an employee
+        check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
+        
+        if not check_user.data or check_user.data["user_id"] != auth_userID:
+            return {
+                "Status": "Error",
+                "Message": "User not found or not authorized"
+            }
+        
+        # Check how many other documents the user already has (max 5)
+        existing_docs = supabase.table("other_documents").select("user_id").eq("user_id", auth_userID).execute()
+        doc_count = len(existing_docs.data) if existing_docs.data else 0
+        
+        if doc_count >= 5:
+            return {
+                "Status": "Error",
+                "Message": "Maximum limit of 5 other documents reached. Please delete an existing document before uploading a new one."
+            }
+        
+        try:
+            # Upload the document to the supabase storage with proper metadata
+            # Using the "other-docs" bucket (separate from "documents" bucket)
+            document_path = f"{auth_userID}/{file.filename}"
+            
+            # Try upload with upsert first, if it fails try without upsert
+            try:
+                upload_result = supabase.storage.from_("other-docs").upload(
+                    document_path,
+                    file_content,
+                    {
+                        "content-type": content_type,
+                        "upsert": True,
+                    },
+                )
+            except Exception as upsert_error:
+                # Try removing existing file first, then upload
+                try:
+                    supabase.storage.from_("other-docs").remove([document_path])
+                except:
+                    pass  # File might not exist, that's fine
+                
+                upload_result = supabase.storage.from_("other-docs").upload(
+                    document_path,
+                    file_content,
+                    {
+                        "content-type": content_type,
+                    },
+                )
+
+            # Get the document URL
+            document_url = supabase.storage.from_("other-docs").get_public_url(document_path)
+            
+            # Store document metadata in the database
+            # Use document_name if provided, otherwise use filename without extension
+            display_name = document_name if document_name else file.filename.rsplit('.', 1)[0]
+            
+            insert_result = supabase.table("other_documents").insert({
+                "user_id": auth_userID,
+                "document_name": display_name,
+                "document_url": document_url,
+                "file_name": file.filename,
+                "created_at": datetime.now().isoformat()
+            }).execute()
+
+            return {
+                "Status": "Success",
+                "Message": "Document uploaded successfully",
+                "DocumentURL": document_url,
+                "DocumentName": display_name,
+                "TotalDocuments": doc_count + 1
+            }
+        except Exception as storage_error:
+            return {
+                "Status": "Error",
+                "Message": "Failed to upload document to storage",
+                "Details": str(storage_error)
+            }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+
+@app.get("/get-other-documents/{user_id}")
+async def getOtherDocuments(user_id: str, request: Request):
+    try:
+        auth_userID = await getAuthUserIdFromRequest(request)
+        supabase = getSupabaseServiceClient()
+        
+        # Check if requester is an employer (can view any user's documents)
+        check_employer = supabase.table("employers").select("user_id").eq("user_id", auth_userID).single().execute()
+        is_employer = check_employer.data and check_employer.data["user_id"] == auth_userID
+        
+        # If not an employer, check if requester is viewing their own documents
+        if not is_employer:
+            if auth_userID != user_id:
+                return {
+                    "Status": "Error",
+                    "Message": "Access denied. You can only view your own documents, or you must be an employer."
+                }
+            
+            # Verify the user is an employee
+            check_user = supabase.table("employee").select("user_id").eq("user_id", auth_userID).single().execute()
+            if not check_user.data or check_user.data["user_id"] != auth_userID:
+                return {
+                    "Status": "Error",
+                    "Message": "User not found or not authorized"
+                }
+        
+        # Fetch all other documents for the target user
+        documents = supabase.table("other_documents").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+        
+        if documents.data:
+            return {
+                "Status": "Success",
+                "Message": "Documents fetched successfully",
+                "Documents": documents.data,
+                "TotalCount": len(documents.data)
+            }
+        else:
+            return {
+                "Status": "Success",
+                "Message": "No other documents found for this user",
+                "Documents": [],
+                "TotalCount": 0
+            }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
+    
