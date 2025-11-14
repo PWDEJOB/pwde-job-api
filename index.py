@@ -4559,4 +4559,74 @@ async def deleteOtherDocument(document_id: str, request: Request):
             "Message": "Internal Server Error",
             "Details": f"{e}"
         }
+
+#skipped jobs
+
+@app.get("/get-skipped-jobs/{user_id}")
+async def getSkippedJobs(user_id: str):
+    supabase = getSupabaseServiceClient()
+    try:
+        skipped_jobs = supabase.table("declined_jobs").select("*").eq("user_id", user_id).execute()
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
     
+    # Check if there are any skipped jobs before querying job data
+    if not skipped_jobs.data or len(skipped_jobs.data) == 0:
+        return {
+            "Status": "Success",
+            "Message": "No skipped jobs found",
+            "SkippedJobs": []
+        }
+    
+    # Get jobs data - only if we have skipped jobs
+    try:
+        job_ids = [job["job_id"] for job in skipped_jobs.data if "job_id" in job]
+        if not job_ids:
+            return {
+                "Status": "Success",
+                "Message": "Skipped jobs fetched successfully",
+                "SkippedJobs": []
+            }
+        
+        jobs_data = supabase.table("jobs").select("*").in_("id", job_ids).execute()
+        
+        return {
+            "Status": "Success",
+            "Message": "Skipped jobs fetched successfully",
+            "SkippedJobs": jobs_data.data if jobs_data.data else []
+        }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Error fetching job details",
+            "Details": f"{e}"
+        }
+
+# delete a skipped job
+@app.delete("/revert-back/{user_id}/{job_id}")
+async def revertBack(user_id: str, job_id: str):
+    try:
+        supabase = getSupabaseServiceClient()
+        # Delete only the specific job for the user
+        delete_result = supabase.table("declined_jobs").delete().eq("user_id", user_id).eq("job_id", job_id).execute()
+        
+        if delete_result.data:
+            return {
+                "Status": "Success",
+                "Message": "Skipped job reverted back successfully"
+            }
+        else:
+            return {
+                "Status": "Error",
+                "Message": "No skipped job found to revert or already reverted"
+            }
+    except Exception as e:
+        return {
+            "Status": "Error",
+            "Message": "Internal Server Error",
+            "Details": f"{e}"
+        }
