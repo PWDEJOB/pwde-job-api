@@ -4465,20 +4465,15 @@ async def getOtherDocuments(user_id: str, request: Request):
         # Fetch all other documents for the target user
         documents = supabase.table("other_documents").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
         
-        if documents.data:
-            return {
-                "Status": "Success",
-                "Message": "Documents fetched successfully",
-                "Documents": documents.data,
-                "TotalCount": len(documents.data)
-            }
-        else:
-            return {
-                "Status": "Success",
-                "Message": "No other documents found for this user",
-                "Documents": [],
-                "TotalCount": 0
-            }
+        # Always return Documents array, even if empty
+        documents_list = documents.data if documents.data else []
+        
+        return {
+            "Status": "Success",
+            "Message": "Documents fetched successfully" if documents_list else "No other documents found for this user",
+            "Documents": documents_list,
+            "TotalCount": len(documents_list)
+        }
     except Exception as e:
         return {
             "Status": "Error",
